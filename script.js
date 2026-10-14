@@ -392,4 +392,3 @@ function renderDashboard() {
 
 renderClients();
 renderDashboard();
-```
