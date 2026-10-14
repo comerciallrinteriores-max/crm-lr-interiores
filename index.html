@@ -1,0 +1,206 @@
+```html
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#173d32">
+  <title>CRM | LR Interiores</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">LR</div>
+        <div>
+          <strong>LR INTERIORES</strong>
+          <span>CRM • Gestão</span>
+        </div>
+      </div>
+
+      <p class="menu-label">MENU PRINCIPAL</p>
+      <nav class="menu">
+        <button class="nav-item active" data-page="dashboard">⌂ <span>Painel inicial</span></button>
+        <button class="nav-item" data-page="clientes">♙ <span>Clientes</span></button>
+        <button class="nav-item" data-page="orcamentos">▤ <span>Orçamentos</span></button>
+        <button class="nav-item" data-page="vendas">↗ <span>Funil de vendas</span></button>
+        <button class="nav-item" data-page="producao">⚒ <span>Produção e entregas</span></button>
+        <button class="nav-item" data-page="financeiro">R$ <span>Financeiro</span></button>
+        <button class="nav-item" data-page="marketing">◎ <span>Marketing</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <span class="status-dot"></span>
+        Seus dados são salvos neste navegador
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="menu-toggle" id="menuToggle" aria-label="Abrir menu">☰</button>
+        <div>
+          <span class="eyebrow">GESTÃO DO NEGÓCIO</span>
+          <h1 id="pageTitle">Painel inicial</h1>
+        </div>
+        <div class="topbar-tag">LR <span>Interiores</span></div>
+      </header>
+
+      <section class="page active" id="page-dashboard">
+        <div class="welcome">
+          <div>
+            <span class="eyebrow">BEM-VINDO AO SEU CRM</span>
+            <h2>Organize. Acompanhe. Cresça.</h2>
+            <p>Tenha uma visão mais clara dos clientes e das oportunidades da LR Interiores.</p>
+          </div>
+          <button class="button button-light" data-go="clientes">+ Novo cliente</button>
+        </div>
+
+        <div class="section-heading">
+          <div>
+            <h2>Visão geral</h2>
+            <p>Resumo dos seus cadastros</p>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <article class="stat-card">
+            <span class="stat-icon">♙</span>
+            <span class="stat-label">Clientes cadastrados</span>
+            <strong id="totalClientes">0</strong>
+            <small>Registros no CRM</small>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon">▤</span>
+            <span class="stat-label">Orçamentos</span>
+            <strong>0</strong>
+            <small>Disponível na próxima etapa</small>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon">↗</span>
+            <span class="stat-label">Vendas em andamento</span>
+            <strong>0</strong>
+            <small>Disponível na próxima etapa</small>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon">R$</span>
+            <span class="stat-label">Faturamento registrado</span>
+            <strong>R$ 0,00</strong>
+            <small>Disponível na etapa financeira</small>
+          </article>
+        </div>
+
+        <div class="content-card">
+          <div class="section-heading">
+            <div>
+              <h2>Clientes recentes</h2>
+              <p>Seus últimos cadastros aparecerão aqui</p>
+            </div>
+            <button class="button button-outline" data-go="clientes">Ver clientes</button>
+          </div>
+          <div id="recentClients" class="empty-state">
+            <div class="empty-icon">♙</div>
+            <strong>Nenhum cliente cadastrado ainda</strong>
+            <p>Comece adicionando seu primeiro cliente.</p>
+            <button class="button button-primary" data-go="clientes">Cadastrar cliente</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-clientes">
+        <div class="section-heading">
+          <div>
+            <h2>Cadastro de clientes</h2>
+            <p>Guarde os contatos e o histórico dos seus clientes.</p>
+          </div>
+          <button class="button button-primary" id="newClientBtn">+ Novo cliente</button>
+        </div>
+
+        <form id="clientForm" class="content-card form-card" hidden>
+          <div class="form-heading">
+            <div>
+              <h2 id="formTitle">Novo cliente</h2>
+              <p>Preencha os dados abaixo.</p>
+            </div>
+            <button type="button" class="button button-outline" id="cancelFormBtn">Cancelar</button>
+          </div>
+
+          <input type="hidden" id="clientId">
+
+          <div class="form-grid">
+            <label>Nome completo *
+              <input id="clientName" name="clientName" required maxlength="120" placeholder="Nome do cliente">
+            </label>
+            <label>Telefone / WhatsApp *
+              <input id="clientPhone" name="clientPhone" required maxlength="30" placeholder="(00) 00000-0000">
+            </label>
+            <label>E-mail
+              <input id="clientEmail" name="clientEmail" type="email" maxlength="150" placeholder="cliente@email.com">
+            </label>
+            <label>Origem do contato
+              <select id="clientSource" name="clientSource">
+                <option value="">Selecione</option>
+                <option>Instagram</option>
+                <option>Facebook</option>
+                <option>Google</option>
+                <option>Indicação</option>
+                <option>Mercado Livre</option>
+                <option>Amazon</option>
+                <option>Shopee</option>
+                <option>TikTok Shop</option>
+                <option>WhatsApp</option>
+                <option>Outro</option>
+              </select>
+            </label>
+            <label class="full-width">Endereço
+              <input id="clientAddress" name="clientAddress" maxlength="250" placeholder="Cidade, bairro e endereço">
+            </label>
+            <label class="full-width">Observações
+              <textarea id="clientNotes" name="clientNotes" rows="3" maxlength="2000" placeholder="Preferências, pedidos e informações importantes"></textarea>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="button button-outline" id="cancelFormBtnBottom">Cancelar</button>
+            <button type="submit" class="button button-primary">Salvar cliente</button>
+          </div>
+        </form>
+
+        <div class="content-card">
+          <div class="list-toolbar">
+            <div>
+              <h2>Seus clientes</h2>
+              <p id="clientCount">0 clientes cadastrados</p>
+            </div>
+            <input id="clientSearch" class="search-input" placeholder="Buscar por nome ou telefone..." aria-label="Buscar clientes">
+          </div>
+          <div id="clientList" class="client-list"></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-orcamentos">
+        <div class="placeholder-card"><span>▤</span><h2>Orçamentos</h2><p>Na próxima etapa, vamos cadastrar projetos, materiais, custos e valores de venda.</p></div>
+      </section>
+      <section class="page" id="page-vendas">
+        <div class="placeholder-card"><span>↗</span><h2>Funil de vendas</h2><p>Vamos acompanhar cada oportunidade, desde o primeiro contato até a venda concluída.</p></div>
+      </section>
+      <section class="page" id="page-producao">
+        <div class="placeholder-card"><span>⚒</span><h2>Produção e entregas</h2><p>Na próxima etapa, organizaremos o andamento dos projetos e as datas de entrega.</p></div>
+      </section>
+      <section class="page" id="page-financeiro">
+        <div class="placeholder-card"><span>R$</span><h2>Financeiro</h2><p>Vamos registrar receitas, despesas, custos e lucro.</p></div>
+      </section>
+      <section class="page" id="page-marketing">
+        <div class="placeholder-card"><span>◎</span><h2>Marketing</h2><p>Vamos acompanhar de onde vêm os contatos e quais canais geram mais vendas.</p></div>
+      </section>
+
+      <footer class="footer">
+        <span>LR Interiores • CRM</span>
+        <span>Versão inicial • Etapa 1</span>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
+```
