@@ -1,4 +1,3 @@
-```javascript
 /* ========================================
    CRM LR INTERIORES
    Cadastro de clientes e armazenamento local
