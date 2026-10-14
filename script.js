@@ -97,6 +97,11 @@ $$("[data-go]").forEach((button) => {
   });
 });
 
+$("#quickNewClientBtn").addEventListener("click", () => {
+  navigateTo("clientes");
+  openClientForm();
+});
+
 $("#menuToggle").addEventListener("click", () => {
   $("#sidebar").classList.toggle("open");
 });
