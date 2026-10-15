@@ -41,7 +41,7 @@ function saveClients() {
     return true;
   } catch (error) {
     console.error("Não foi possível salvar os clientes:", error);
-    alert("Não foi possível salvar os dados neste navegador. Verifique o espaço disponível ou as configurações de privacidade.");
+    alert("Não foi possível preparar os dados para sincronização. Confira a conexão com o Firebase e tente novamente.");
     return false;
   }
 }
@@ -98,7 +98,7 @@ function saveQuotes() {
     return true;
   } catch (error) {
     console.error("Não foi possível salvar os orçamentos:", error);
-    alert("Não foi possível salvar os orçamentos neste navegador. Verifique o espaço disponível ou as configurações de privacidade.");
+    alert("Não foi possível preparar os orçamentos para sincronização. Confira a conexão com o Firebase e tente novamente.");
     return false;
   }
 }
@@ -1100,7 +1100,7 @@ function saveSales() {
     return true;
   } catch (error) {
     console.error("Não foi possível salvar o funil de vendas:", error);
-    alert("Não foi possível salvar as oportunidades neste navegador. Verifique o espaço disponível ou as configurações de privacidade.");
+    alert("Não foi possível preparar as oportunidades para sincronização. Confira a conexão com o Firebase e tente novamente.");
     return false;
   }
 }
@@ -1390,7 +1390,7 @@ function saveProductionOrders() {
     return true;
   } catch (error) {
     console.error("Não foi possível salvar a produção:", error);
-    alert("Não foi possível salvar os projetos neste navegador. Verifique o espaço disponível ou as configurações de privacidade.");
+    alert("Não foi possível preparar os projetos para sincronização. Confira a conexão com o Firebase e tente novamente.");
     return false;
   }
 }
@@ -1933,7 +1933,7 @@ function saveFinanceEntries() {
     return true;
   } catch (error) {
     console.error("Não foi possível salvar os lançamentos financeiros:", error);
-    alert("Não foi possível salvar os lançamentos neste navegador. Verifique o espaço disponível ou as configurações de privacidade.");
+    alert("Não foi possível preparar os lançamentos para sincronização. Confira a conexão com o Firebase e tente novamente.");
     return false;
   }
 }
