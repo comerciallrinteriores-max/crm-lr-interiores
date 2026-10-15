@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="orcamentos.css">
   <link rel="stylesheet" href="vendas.css">
+  <link rel="stylesheet" href="producao.css">
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -378,7 +379,96 @@
         </div>
       </section>
       <section class="page" id="page-producao">
-        <div class="placeholder-card"><span>⚒</span><h2>Produção e entregas</h2><p>Na próxima etapa, organizaremos o andamento dos projetos e as datas de entrega.</p></div>
+        <div class="section-heading production-heading">
+          <div>
+            <h2>Acompanhamento de projetos</h2>
+            <p>Organize a produção, os prazos e as entregas dos projetos vendidos.</p>
+          </div>
+          <button class="button button-primary" id="newProductionBtn">+ Nova ordem</button>
+        </div>
+
+        <div class="production-summary-grid">
+          <article class="production-summary-card">
+            <span>Projetos em andamento</span>
+            <strong id="productionActiveCount">0</strong>
+          </article>
+          <article class="production-summary-card">
+            <span>Em produção</span>
+            <strong id="productionWorkingCount">0</strong>
+          </article>
+          <article class="production-summary-card">
+            <span>Prontos para entrega</span>
+            <strong id="productionReadyCount">0</strong>
+          </article>
+        </div>
+
+        <form id="productionForm" class="content-card production-form" hidden>
+          <div class="form-heading">
+            <div>
+              <h2 id="productionFormTitle">Nova ordem de produção</h2>
+              <p>Vincule a uma venda concluída ou registre um projeto manualmente.</p>
+            </div>
+            <button type="button" class="button button-outline" id="cancelProductionBtn">Cancelar</button>
+          </div>
+          <input type="hidden" id="productionId">
+          <div class="form-grid">
+            <label>Nome do projeto *
+              <input id="productionTitle" required maxlength="150" placeholder="Ex.: Mobiliário para recepção">
+            </label>
+            <label>Status do projeto
+              <select id="productionStatus">
+                <option value="pending">Aguardando início</option>
+                <option value="production">Em produção</option>
+                <option value="finishing">Acabamento / revisão</option>
+                <option value="ready">Pronto para entrega</option>
+                <option value="delivered">Entregue ao cliente</option>
+                <option value="paused">Pausado</option>
+              </select>
+            </label>
+            <label>Venda concluída vinculada
+              <select id="productionSale">
+                <option value="">Sem venda vinculada</option>
+              </select>
+            </label>
+            <label>Cliente
+              <select id="productionClient">
+                <option value="">Sem cliente vinculado</option>
+              </select>
+            </label>
+            <label>Orçamento relacionado
+              <select id="productionQuote">
+                <option value="">Sem orçamento vinculado</option>
+              </select>
+            </label>
+            <label>Início da produção
+              <input id="productionStartDate" type="date">
+            </label>
+            <label>Prazo previsto de entrega
+              <input id="productionDeadline" type="date">
+            </label>
+            <label>Data da entrega
+              <input id="productionDeliveredDate" type="date">
+            </label>
+            <label class="full-width">Observações
+              <textarea id="productionNotes" rows="3" maxlength="2000" placeholder="Materiais, medidas, detalhes de fabricação ou entrega"></textarea>
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="button button-outline" id="cancelProductionBtnBottom">Cancelar</button>
+            <button type="submit" class="button button-primary">Salvar ordem</button>
+          </div>
+        </form>
+
+        <div class="content-card production-list-card">
+          <div class="list-toolbar production-toolbar">
+            <div>
+              <h2>Projetos e entregas</h2>
+              <p id="productionListCount">0 projetos</p>
+            </div>
+            <input id="productionSearch" class="search-input" placeholder="Buscar projeto ou cliente..." aria-label="Buscar projetos de produção">
+          </div>
+          <div id="productionList" class="production-list"></div>
+        </div>
       </section>
       <section class="page" id="page-financeiro">
         <div class="placeholder-card"><span>R$</span><h2>Financeiro</h2><p>Vamos registrar receitas, despesas, custos e lucro.</p></div>
