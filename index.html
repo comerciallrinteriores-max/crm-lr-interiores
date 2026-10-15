@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="orcamentos.css">
   <link rel="stylesheet" href="vendas.css">
   <link rel="stylesheet" href="producao.css">
+  <link rel="stylesheet" href="financeiro.css">
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -504,7 +505,116 @@
         </div>
       </section>
       <section class="page" id="page-financeiro">
-        <div class="placeholder-card"><span>R$</span><h2>Financeiro</h2><p>Vamos registrar receitas, despesas, custos e lucro.</p></div>
+        <div class="section-heading finance-heading">
+          <div>
+            <h2>Controle financeiro</h2>
+            <p>Registre o que entrou, o que saiu e o que ainda está pendente.</p>
+          </div>
+          <button class="button button-primary" id="newFinanceEntryBtn">+ Novo lançamento</button>
+        </div>
+
+        <div class="finance-notice">
+          <strong>Controle real do caixa</strong>
+          <p>Registre aqui recebimentos e despesas efetivos. Os custos estimados dos orçamentos não são lançados automaticamente, evitando duplicidade.</p>
+        </div>
+
+        <div class="finance-summary-grid">
+          <article class="finance-summary-card">
+            <span>Recebido no mês</span>
+            <strong id="financeReceived">R$ 0,00</strong>
+          </article>
+          <article class="finance-summary-card">
+            <span>A receber no mês</span>
+            <strong id="financeToReceive">R$ 0,00</strong>
+          </article>
+          <article class="finance-summary-card">
+            <span>Despesas pagas no mês</span>
+            <strong id="financeExpensesPaid">R$ 0,00</strong>
+          </article>
+          <article class="finance-summary-card finance-balance-card">
+            <span>Saldo realizado no mês</span>
+            <strong id="financeBalance">R$ 0,00</strong>
+          </article>
+        </div>
+
+        <form id="financeForm" class="content-card finance-form" hidden>
+          <div class="form-heading">
+            <div>
+              <h2 id="financeFormTitle">Novo lançamento</h2>
+              <p>Cadastre uma receita ou despesa e acompanhe o pagamento.</p>
+            </div>
+            <button type="button" class="button button-outline" id="cancelFinanceBtn">Cancelar</button>
+          </div>
+          <input type="hidden" id="financeId">
+          <div class="form-grid">
+            <label>Tipo de lançamento *
+              <select id="financeType" required>
+                <option value="income">Receita / entrada</option>
+                <option value="expense">Despesa / saída</option>
+              </select>
+            </label>
+            <label>Descrição *
+              <input id="financeDescription" required maxlength="150" placeholder="Ex.: Sinal do projeto, compra de MDF...">
+            </label>
+            <label>Categoria *
+              <select id="financeCategory" required>
+                <option value="Venda / serviço">Venda / serviço</option>
+                <option value="Entrada extra">Entrada extra</option>
+                <option value="Materiais">Materiais</option>
+                <option value="Mão de obra">Mão de obra</option>
+                <option value="Frete / entrega">Frete / entrega</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Taxas / impostos">Taxas / impostos</option>
+                <option value="Equipamentos">Equipamentos</option>
+                <option value="Despesas fixas">Despesas fixas</option>
+                <option value="Outros">Outros</option>
+              </select>
+            </label>
+            <label>Valor (R$) *
+              <input id="financeAmount" type="number" min="0.01" step="0.01" required placeholder="0,00">
+            </label>
+            <label>Vencimento / data prevista *
+              <input id="financeDueDate" type="date" required>
+            </label>
+            <label>Status
+              <select id="financeStatus">
+                <option value="pending">Pendente</option>
+                <option value="paid">Pago / recebido</option>
+              </select>
+            </label>
+            <label>Data do pagamento / recebimento
+              <input id="financePaidDate" type="date">
+            </label>
+            <label>Cliente relacionado
+              <select id="financeClient">
+                <option value="">Sem cliente vinculado</option>
+              </select>
+            </label>
+            <label class="full-width">Observações
+              <textarea id="financeNotes" rows="3" maxlength="2000" placeholder="Forma de pagamento, parcelas, comprovante ou detalhes..."></textarea>
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="button button-outline" id="cancelFinanceBtnBottom">Cancelar</button>
+            <button type="submit" class="button button-primary">Salvar lançamento</button>
+          </div>
+        </form>
+
+        <div class="content-card finance-list-card">
+          <div class="list-toolbar">
+            <div>
+              <h2>Lançamentos</h2>
+              <p id="financeCount">0 lançamentos</p>
+            </div>
+            <div class="finance-filters">
+              <label class="finance-month-filter">Mês
+                <input id="financeMonth" type="month" aria-label="Filtrar lançamentos por mês">
+              </label>
+              <input id="financeSearch" class="search-input" placeholder="Buscar descrição, categoria ou cliente..." aria-label="Buscar lançamentos financeiros">
+            </div>
+          </div>
+          <div id="financeList" class="finance-list"></div>
+        </div>
       </section>
       <section class="page" id="page-marketing">
         <div class="placeholder-card"><span>◎</span><h2>Marketing</h2><p>Vamos acompanhar de onde vêm os contatos e quais canais geram mais vendas.</p></div>
