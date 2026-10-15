@@ -145,6 +145,7 @@ function navigateTo(pageName) {
   if (pageName === "vendas") renderSales();
   if (pageName === "producao") renderProduction();
   if (pageName === "financeiro") renderFinance();
+  if (pageName === "marketing") renderMarketing();
 }
 
 $$(".nav-item").forEach((button) => {
@@ -282,6 +283,7 @@ function createId() {
 /* ---------- Lista de clientes ---------- */
 function renderClients(searchTerm = "") {
   const list = $("#clientList");
+  if ($("#marketingChannelRows")) renderMarketing();
 
   const normalizedSearch = searchTerm
     .trim()
@@ -428,6 +430,18 @@ function renderDashboard() {
   $("#totalClientes").textContent = clients.length;
   $("#totalOrcamentos").textContent = quotes.length;
 
+  const currentMonth = localISODate().slice(0, 7);
+  const openSales = sales.filter((sale) => !["won", "lost"].includes(sale.stage));
+  const receivedThisMonth = financeEntries.reduce(
+    (sum, entry) => sum + financeReceivedInMonth(entry, currentMonth),
+    0
+  );
+  $("#dashboardOpenSales").textContent = openSales.length;
+  $("#dashboardReceivedMonth").textContent = formatBRL(receivedThisMonth);
+
+  renderDashboardFollowups();
+  renderDashboardDeadlines();
+
   const recentClients = $("#recentClients");
 
   if (clients.length === 0) {
@@ -492,7 +506,142 @@ function renderDashboard() {
     });
 }
 
-/* ---------- Orçamentos e custos ---------- */
+function renderDashboardFollowups() {
+  const container = $("#dashboardFollowups");
+  const today = localISODate();
+  const horizonDate = new Date();
+  horizonDate.setDate(horizonDate.getDate() + 7);
+  const horizon = localISODate(horizonDate);
+  const dueSales = sales
+    .filter((sale) => !["won", "lost"].includes(sale.stage) && sale.followupDate && sale.followupDate <= horizon)
+    .sort((a, b) => a.followupDate.localeCompare(b.followupDate))
+    .slice(0, 5);
+
+  if (!dueSales.length) {
+    container.innerHTML = '<div class="dashboard-alert-empty">Nenhum retorno vencido ou previsto para os próximos 7 dias.</div>';
+    return;
+  }
+
+  container.innerHTML = dueSales.map((sale) => {
+    const client = clients.find((item) => item.id === sale.clientId);
+    const dateLabel = sale.followupDate < today ? "Atrasado" : sale.followupDate === today ? "Hoje" : formatSalesDate(sale.followupDate);
+    const urgency = sale.followupDate < today ? "is-overdue" : sale.followupDate === today ? "is-today" : "";
+    return `<button type="button" class="dashboard-alert-item ${urgency}" data-dashboard-sale="${escapeHTML(sale.id)}">
+      <span class="dashboard-alert-date">${escapeHTML(dateLabel)}</span>
+      <span class="dashboard-alert-copy"><strong>${escapeHTML(sale.title)}</strong><small>${escapeHTML(client?.name || sale.clientName || "Sem cliente vinculado")}</small></span>
+      <span class="dashboard-alert-arrow">›</span>
+    </button>`;
+  }).join("");
+}
+
+function renderDashboardDeadlines() {
+  const container = $("#dashboardDeadlines");
+  const today = localISODate();
+  const horizonDate = new Date();
+  horizonDate.setDate(horizonDate.getDate() + 7);
+  const horizon = localISODate(horizonDate);
+  const dueOrders = productionOrders
+    .filter((order) => order.status !== "delivered" && order.deadline && order.deadline <= horizon)
+    .sort((a, b) => a.deadline.localeCompare(b.deadline))
+    .slice(0, 5);
+
+  if (!dueOrders.length) {
+    container.innerHTML = '<div class="dashboard-alert-empty">Nenhum prazo atrasado ou previsto para os próximos 7 dias.</div>';
+    return;
+  }
+
+  container.innerHTML = dueOrders.map((order) => {
+    const client = clients.find((item) => item.id === order.clientId);
+    const dateLabel = order.deadline < today ? "Atrasado" : order.deadline === today ? "Hoje" : formatProductionDate(order.deadline);
+    const urgency = order.deadline < today ? "is-overdue" : order.deadline === today ? "is-today" : "";
+    return `<button type="button" class="dashboard-alert-item ${urgency}" data-dashboard-production="${escapeHTML(order.id)}">
+      <span class="dashboard-alert-date">${escapeHTML(dateLabel)}</span>
+      <span class="dashboard-alert-copy"><strong>${escapeHTML(order.title)}</strong><small>${escapeHTML(client?.name || order.clientName || "Sem cliente vinculado")}</small></span>
+      <span class="dashboard-alert-arrow">›</span>
+    </button>`;
+  }).join("");
+}
+
+$("#dashboardFollowups").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-dashboard-sale]");
+  if (!button) return;
+  const sale = sales.find((item) => item.id === button.dataset.dashboardSale);
+  if (!sale) return;
+  navigateTo("vendas");
+  openSaleForm(sale);
+});
+
+$("#dashboardDeadlines").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-dashboard-production]");
+  if (!button) return;
+  const order = productionOrders.find((item) => item.id === button.dataset.dashboardProduction);
+  if (!order) return;
+  navigateTo("producao");
+  openProductionForm(order);
+});
+
+/* ---------- Marketing ---------- */
+function renderMarketing() {
+  const sourceForClient = (client) => (client.source || "").trim() || "Não informado";
+  const trackedContacts = clients.filter((client) => Boolean((client.source || "").trim())).length;
+  const openSales = sales.filter((sale) => !["won", "lost"].includes(sale.stage));
+  const wonSales = sales.filter((sale) => sale.stage === "won");
+  const wonValue = wonSales.reduce((sum, sale) => sum + Math.max(0, Number(sale.expectedValue) || 0), 0);
+
+  $("#marketingContacts").textContent = clients.length;
+  $("#marketingTrackedContacts").textContent = trackedContacts;
+  $("#marketingOpenSales").textContent = openSales.length;
+  $("#marketingWonValue").textContent = formatBRL(wonValue);
+
+  const channels = new Map();
+  clients.forEach((client) => {
+    const source = sourceForClient(client);
+    if (!channels.has(source)) channels.set(source, { source, contacts: 0, opportunities: 0, won: 0, wonValue: 0 });
+    channels.get(source).contacts += 1;
+  });
+  sales.forEach((sale) => {
+    const client = clients.find((item) => item.id === sale.clientId);
+    if (!client) return;
+    const source = sourceForClient(client);
+    if (!channels.has(source)) channels.set(source, { source, contacts: 0, opportunities: 0, won: 0, wonValue: 0 });
+    const channel = channels.get(source);
+    channel.opportunities += 1;
+    if (sale.stage === "won") {
+      channel.won += 1;
+      channel.wonValue += Math.max(0, Number(sale.expectedValue) || 0);
+    }
+  });
+
+  const sortedChannels = [...channels.values()].sort((a, b) =>
+    b.contacts - a.contacts || b.wonValue - a.wonValue || a.source.localeCompare(b.source, "pt-BR")
+  );
+  $("#marketingChannelCount").textContent = sortedChannels.length
+    ? `${sortedChannels.length} ${sortedChannels.length === 1 ? "origem identificada" : "origens identificadas"}`
+    : "Nenhum canal identificado";
+
+  const rows = $("#marketingChannelRows");
+  if (!sortedChannels.length) {
+    rows.innerHTML = '<tr><td colspan="6" class="marketing-empty-cell">Cadastre clientes e preencha o campo “Origem do contato” para começar a acompanhar os canais.</td></tr>';
+    return;
+  }
+
+  rows.innerHTML = sortedChannels.map((channel) => {
+    const conversion = channel.opportunities ? (channel.won / channel.opportunities) * 100 : 0;
+    const conversionLabel = channel.opportunities
+      ? `${conversion.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`
+      : "—";
+    return `<tr>
+      <td><strong>${escapeHTML(channel.source)}</strong></td>
+      <td>${channel.contacts}</td>
+      <td>${channel.opportunities}</td>
+      <td>${channel.won}</td>
+      <td><span class="marketing-conversion"><span style="width:${Math.max(0, Math.min(100, conversion))}%"></span></span><small class="marketing-conversion-label">${conversionLabel}</small></td>
+      <td class="marketing-value-cell">${formatBRL(channel.wonValue)}</td>
+    </tr>`;
+  }).join("");
+}
+
+
 const quoteMoneyFields = [
   "#quoteMaterials",
   "#quoteLabor",
@@ -1094,6 +1243,8 @@ function moveSaleToStage(saleId, stageId) {
 }
 
 function renderSales(searchTerm = $("#salesSearch").value) {
+  renderDashboard();
+  if ($("#marketingChannelRows")) renderMarketing();
   renderSalesOptions();
   const normalizedSearch = (searchTerm || "").trim().toLocaleLowerCase("pt-BR");
   const filteredSales = sales.filter((sale) => {
@@ -1482,6 +1633,7 @@ function formatProductionDate(value) {
 }
 
 function renderProduction(searchTerm = $("#productionSearch").value) {
+  renderDashboard();
   renderProductionOptions();
   const normalizedSearch = (searchTerm || "").trim().toLocaleLowerCase("pt-BR");
   const filtered = productionOrders.filter((order) => {
@@ -1924,6 +2076,7 @@ function importWonSalesToFinance() {
 }
 
 function renderFinance(searchTerm = $("#financeSearch").value) {
+  renderDashboard();
   const month = $("#financeMonth").value || localISODate().slice(0, 7);
   const normalizedSearch = (searchTerm || "").trim().toLocaleLowerCase("pt-BR");
   const monthEntries = financeEntries.filter((entry) => {
