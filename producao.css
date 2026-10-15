@@ -1,0 +1,147 @@
+/* Produção e entregas — identidade visual LR Interiores */
+.production-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 22px 0;
+}
+.production-summary-card {
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.production-summary-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+.production-summary-card strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--green);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(20px, 2vw, 27px);
+  font-weight: 500;
+}
+.production-form[hidden] { display: none; }
+.production-list-card { padding: 20px; }
+.production-toolbar { margin-bottom: 18px; }
+.production-list { display: grid; gap: 13px; }
+.production-order {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 175px;
+  gap: 20px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(26, 54, 42, 0.025);
+}
+.production-order-main { min-width: 0; }
+.production-order-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.production-order-kicker {
+  color: #8a948d;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.production-order-top h3 {
+  margin: 3px 0 6px;
+  color: var(--green);
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.production-client-name {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.production-linked-record {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.production-status {
+  flex: 0 0 auto;
+  max-width: 170px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+}
+.production-status-pending { background: #f0f1ee; color: #616b64; }
+.production-status-working { background: #e6eef8; color: #315b88; }
+.production-status-finishing { background: #f7f0e3; color: #876326; }
+.production-status-ready { background: #e8f0eb; color: #245d43; }
+.production-status-delivered { background: #dff2e6; color: #23633e; }
+.production-status-paused { background: #f8e8e8; color: #9d4141; }
+.production-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-top: 14px;
+}
+.production-dates span { min-width: 100px; }
+.production-dates small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+.production-dates strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.production-dates .production-overdue strong { color: var(--danger); }
+.production-notes {
+  margin: 13px 0 0;
+  padding-top: 11px;
+  border-top: 1px solid #edf0ed;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.production-order-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+.production-order-actions label {
+  color: var(--muted);
+  font-size: 10px;
+}
+.production-order-actions select {
+  margin-top: 5px;
+  padding: 8px;
+  font-size: 11px;
+}
+.production-order-actions .button {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+.production-delete { color: var(--danger); }
+@media (max-width: 760px) {
+  .production-summary-grid { grid-template-columns: 1fr; }
+  .production-summary-card { padding: 15px 17px; }
+  .production-list-card { padding: 14px; }
+  .production-order { grid-template-columns: 1fr; gap: 14px; padding: 14px; }
+  .production-order-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .production-order-actions label { grid-column: 1 / -1; }
+  .production-order-actions select { width: 100%; }
+  .production-order-top { flex-direction: column; }
+}
