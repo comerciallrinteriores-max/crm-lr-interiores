@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
 import { initializeCloudData } from "./firebase-data.js?v=1";
 import {
   getAuth,
@@ -18,7 +18,7 @@ const firebaseConfig = {
   appId: "1:916787768354:web:e55272a3b260e0d9ff2e7b"
 };
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
 const authScreen = document.getElementById("authScreen");
