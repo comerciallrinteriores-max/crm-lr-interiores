@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#173d32">
   <title>CRM | LR Interiores</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="orcamentos.css">
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -18,7 +19,6 @@
           <span>CRM • Gestão</span>
         </div>
       </div>
-
       <p class="menu-label">MENU PRINCIPAL</p>
       <nav class="menu">
         <button class="nav-item active" data-page="dashboard">⌂ <span>Painel inicial</span></button>
@@ -29,7 +29,6 @@
         <button class="nav-item" data-page="financeiro">R$ <span>Financeiro</span></button>
         <button class="nav-item" data-page="marketing">◎ <span>Marketing</span></button>
       </nav>
-
       <div class="sidebar-bottom">
         <span class="status-dot"></span>
         Seus dados são salvos neste navegador
@@ -55,14 +54,12 @@
           </div>
           <button class="button button-light" id="quickNewClientBtn">+ Novo cliente</button>
         </div>
-
         <div class="section-heading">
           <div>
             <h2>Visão geral</h2>
             <p>Resumo dos seus cadastros</p>
           </div>
         </div>
-
         <div class="stats-grid">
           <article class="stat-card">
             <span class="stat-icon">♙</span>
@@ -73,8 +70,8 @@
           <article class="stat-card">
             <span class="stat-icon">▤</span>
             <span class="stat-label">Orçamentos</span>
-            <strong>0</strong>
-            <small>Disponível na próxima etapa</small>
+            <strong id="totalOrcamentos">0</strong>
+            <small>Orçamentos registrados</small>
           </article>
           <article class="stat-card">
             <span class="stat-icon">↗</span>
@@ -89,7 +86,6 @@
             <small>Disponível na etapa financeira</small>
           </article>
         </div>
-
         <div class="content-card">
           <div class="section-heading">
             <div>
@@ -115,7 +111,6 @@
           </div>
           <button class="button button-primary" id="newClientBtn">+ Novo cliente</button>
         </div>
-
         <form id="clientForm" class="content-card form-card" hidden>
           <div class="form-heading">
             <div>
@@ -124,9 +119,7 @@
             </div>
             <button type="button" class="button button-outline" id="cancelFormBtn">Cancelar</button>
           </div>
-
           <input type="hidden" id="clientId">
-
           <div class="form-grid">
             <label>Nome completo *
               <input id="clientName" name="clientName" required maxlength="120" placeholder="Nome do cliente">
@@ -159,13 +152,11 @@
               <textarea id="clientNotes" name="clientNotes" rows="3" maxlength="2000" placeholder="Preferências, pedidos e informações importantes"></textarea>
             </label>
           </div>
-
           <div class="form-actions">
             <button type="button" class="button button-outline" id="cancelFormBtnBottom">Cancelar</button>
             <button type="submit" class="button button-primary">Salvar cliente</button>
           </div>
         </form>
-
         <div class="content-card">
           <div class="list-toolbar">
             <div>
@@ -179,8 +170,125 @@
       </section>
 
       <section class="page" id="page-orcamentos">
-        <div class="placeholder-card"><span>▤</span><h2>Orçamentos</h2><p>Na próxima etapa, vamos cadastrar projetos, materiais, custos e valores de venda.</p></div>
+        <div class="section-heading">
+          <div>
+            <h2>Orçamentos e custos</h2>
+            <p>Calcule o custo do projeto, o lucro estimado e a margem antes de fechar a venda.</p>
+          </div>
+          <button class="button button-primary" id="newQuoteBtn">+ Novo orçamento</button>
+        </div>
+
+        <div class="quote-intro">
+          <span class="quote-intro-icon">▤</span>
+          <div>
+            <strong>Precifique com mais segurança</strong>
+            <p>Some materiais, mão de obra e outros custos para entender quanto sobra do preço de venda.</p>
+          </div>
+        </div>
+
+        <form id="quoteForm" class="content-card quote-form" hidden>
+          <div class="form-heading">
+            <div>
+              <h2 id="quoteFormTitle">Novo orçamento</h2>
+              <p>Preencha os dados do projeto e os valores estimados.</p>
+            </div>
+            <button type="button" class="button button-outline" id="cancelQuoteBtn">Cancelar</button>
+          </div>
+          <input type="hidden" id="quoteId">
+
+          <div class="form-grid">
+            <label>Nome do projeto / produto *
+              <input id="quoteName" required maxlength="150" placeholder="Ex.: Expositor de esmaltes MDF branco">
+            </label>
+            <label>Cliente
+              <select id="quoteClient">
+                <option value="">Sem cliente vinculado</option>
+              </select>
+            </label>
+            <label>Status do orçamento
+              <select id="quoteStatus">
+                <option value="Rascunho">Rascunho</option>
+                <option value="Enviado">Enviado ao cliente</option>
+                <option value="Aprovado">Aprovado</option>
+                <option value="Recusado">Recusado</option>
+              </select>
+            </label>
+            <label>Prazo / observação curta
+              <input id="quoteDeadline" maxlength="120" placeholder="Ex.: 10 dias úteis">
+            </label>
+            <label class="full-width">Descrição do projeto e materiais
+              <textarea id="quoteDescription" rows="3" maxlength="2000" placeholder="Medidas, MDF/MDP, ferragens, acabamento e outros detalhes..."></textarea>
+            </label>
+          </div>
+
+          <div class="quote-cost-heading">
+            <h3>Composição dos custos</h3>
+            <p>Informe o custo total de cada categoria, não o preço cobrado do cliente.</p>
+          </div>
+          <div class="form-grid quote-cost-grid">
+            <label>Custo dos materiais (R$) *
+              <input id="quoteMaterials" type="number" min="0" step="0.01" value="0" required>
+            </label>
+            <label>Custo da mão de obra (R$) *
+              <input id="quoteLabor" type="number" min="0" step="0.01" value="0" required>
+            </label>
+            <label>Custos adicionais (R$)
+              <input id="quoteExtra" type="number" min="0" step="0.01" value="0">
+            </label>
+            <label>Preço de venda (R$) *
+              <input id="quotePrice" type="number" min="0.01" step="0.01" required placeholder="0,00">
+            </label>
+          </div>
+
+          <div class="quote-calculations" aria-live="polite">
+            <div class="calculation-item">
+              <span>Custo total</span>
+              <strong id="quoteTotalCost">R$ 0,00</strong>
+            </div>
+            <div class="calculation-item">
+              <span>Lucro estimado</span>
+              <strong id="quoteProfit">R$ 0,00</strong>
+            </div>
+            <div class="calculation-item">
+              <span>Margem de lucro</span>
+              <strong id="quoteMargin">0,0%</strong>
+            </div>
+          </div>
+          <p class="quote-calculation-note">Cálculo estimado: lucro = preço de venda − custos; margem = lucro ÷ preço de venda. Impostos, taxas e despesas que não forem informados não entram na conta.</p>
+
+          <div class="form-actions">
+            <button type="button" class="button button-outline" id="cancelQuoteBtnBottom">Cancelar</button>
+            <button type="submit" class="button button-primary">Salvar orçamento</button>
+          </div>
+        </form>
+
+        <div class="quote-summary-grid">
+          <article class="quote-summary-card">
+            <span>Total de orçamentos</span>
+            <strong id="quoteSummaryCount">0</strong>
+          </article>
+          <article class="quote-summary-card">
+            <span>Em aberto</span>
+            <strong id="quoteSummaryOpen">0</strong>
+          </article>
+          <article class="quote-summary-card">
+            <span>Aprovados</span>
+            <strong id="quoteSummaryApproved">0</strong>
+          </article>
+        </div>
+
+        <div class="content-card">
+          <div class="list-toolbar">
+            <div>
+              <h2>Seus orçamentos</h2>
+              <p id="quoteCount">Nenhum orçamento cadastrado</p>
+            </div>
+            <input id="quoteSearch" class="search-input" placeholder="Buscar projeto ou cliente..." aria-label="Buscar orçamentos">
+          </div>
+          <div id="quoteList" class="quote-list"></div>
+        </div>
       </section>
+
       <section class="page" id="page-vendas">
         <div class="placeholder-card"><span>↗</span><h2>Funil de vendas</h2><p>Vamos acompanhar cada oportunidade, desde o primeiro contato até a venda concluída.</p></div>
       </section>
@@ -193,10 +301,9 @@
       <section class="page" id="page-marketing">
         <div class="placeholder-card"><span>◎</span><h2>Marketing</h2><p>Vamos acompanhar de onde vêm os contatos e quais canais geram mais vendas.</p></div>
       </section>
-
       <footer class="footer">
         <span>LR Interiores • CRM</span>
-        <span>Versão inicial • Etapa 1</span>
+        <span>Etapa 2 • Orçamentos e custos</span>
       </footer>
     </main>
   </div>

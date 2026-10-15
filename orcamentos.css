@@ -1,0 +1,234 @@
+/* Estilos adicionados para a etapa de orçamentos e custos */
+.quote-intro {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin: 0 0 22px;
+  padding: 20px 22px;
+  border: 1px solid #e4e9e5;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgba(26, 54, 42, 0.04);
+}
+.quote-intro-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #e8f0eb;
+  color: #173d32;
+  font-size: 22px;
+}
+.quote-intro strong {
+  display: block;
+  color: #173d32;
+  font-size: 14px;
+}
+.quote-intro p {
+  margin: 4px 0 0;
+  color: #78827c;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.quote-cost-heading {
+  margin: 26px 0 14px;
+  padding-top: 21px;
+  border-top: 1px solid #e4e9e5;
+}
+.quote-cost-heading h3 {
+  margin: 0;
+  color: #173d32;
+  font-size: 15px;
+}
+.quote-cost-heading p {
+  margin: 5px 0 0;
+  color: #78827c;
+  font-size: 12px;
+}
+.quote-calculations {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+  margin-top: 22px;
+}
+.calculation-item {
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid #e4e9e5;
+  border-radius: 12px;
+  background: #f8faf8;
+}
+.calculation-item span,
+.quote-summary-card span {
+  display: block;
+  color: #78827c;
+  font-size: 11px;
+}
+.calculation-item strong {
+  display: block;
+  margin-top: 7px;
+  color: #173d32;
+  font-size: clamp(17px, 2vw, 23px);
+  overflow-wrap: anywhere;
+}
+.calculation-item:nth-child(2) {
+  background: #e8f0eb;
+}
+.calculation-item:nth-child(3) {
+  background: #f7f0e3;
+}
+.quote-calculation-note {
+  margin: 12px 0 0;
+  color: #78827c;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.quote-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 22px 0;
+}
+.quote-summary-card {
+  padding: 17px 19px;
+  border: 1px solid #e4e9e5;
+  border-radius: 12px;
+  background: #fff;
+}
+.quote-summary-card strong {
+  display: block;
+  margin-top: 5px;
+  color: #173d32;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 26px;
+  font-weight: 500;
+}
+.quote-list {
+  display: grid;
+  gap: 13px;
+}
+.quote-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 19px;
+  border: 1px solid #e4e9e5;
+  border-radius: 12px;
+  background: #fff;
+}
+.quote-row-main {
+  flex: 1;
+  min-width: 0;
+}
+.quote-row-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.quote-row-top h3 {
+  margin: 0;
+  color: #173d32;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.quote-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.status-draft {
+  background: #f1f3f1;
+  color: #626d65;
+}
+.status-sent {
+  background: #e8f0fb;
+  color: #315c91;
+}
+.status-approved {
+  background: #e4f4e8;
+  color: #27683c;
+}
+.status-rejected {
+  background: #fae9e7;
+  color: #a33c36;
+}
+.quote-client-name,
+.quote-deadline,
+.quote-description {
+  margin: 5px 0 0;
+  color: #78827c;
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.quote-row-values {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(95px, 1fr));
+  gap: 12px;
+  margin-top: 17px;
+  padding-top: 14px;
+  border-top: 1px solid #edf0ed;
+}
+.quote-row-values span {
+  min-width: 0;
+}
+.quote-row-values small {
+  display: block;
+  color: #78827c;
+  font-size: 10px;
+}
+.quote-row-values strong {
+  display: block;
+  margin-top: 4px;
+  color: #173d32;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.negative-value {
+  color: #b74444 !important;
+}
+.quote-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.quote-delete {
+  color: #b74444;
+}
+@media (max-width: 900px) {
+  .quote-row-values {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  .quote-intro {
+    align-items: flex-start;
+    padding: 16px;
+  }
+  .quote-calculations,
+  .quote-summary-grid {
+    grid-template-columns: 1fr;
+  }
+  .quote-row {
+    flex-direction: column;
+  }
+  .quote-row-actions {
+    flex-direction: row;
+    width: 100%;
+  }
+  .quote-row-actions .button {
+    flex: 1;
+  }
+  .quote-row-values {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
