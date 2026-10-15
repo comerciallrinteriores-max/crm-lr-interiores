@@ -1,4 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+import { initializeCloudData } from "./firebase-data.js?v=1";
 import {
   getAuth,
   setPersistence,
@@ -50,14 +51,16 @@ async function showCRM() {
 
   try {
     if (!crmLoaded) {
-      await import("./script.js?v=20261015-4");
+      await initializeCloudData(auth.currentUser.uid);
+      await import("./script.js?v=20261015-5");
       crmLoaded = true;
     }
     appLoading.hidden = true;
     crmApp.hidden = false;
   } catch (error) {
     console.error("Falha ao carregar o CRM:", error);
-    showLogin("Não foi possível carregar o CRM. Atualize a página e tente novamente.");
+    await signOut(auth).catch(() => {});
+    showLogin("Não foi possível conectar os dados à nuvem. Confira as regras do Firestore e tente novamente.");
   }
 }
 
