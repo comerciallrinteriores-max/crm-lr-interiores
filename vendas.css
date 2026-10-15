@@ -1,0 +1,201 @@
+/* Funil de vendas — identidade visual LR Interiores */
+.sales-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 22px 0;
+}
+.sales-summary-card {
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+.sales-summary-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+.sales-summary-card strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--green);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(20px, 2vw, 27px);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.sales-form[hidden] { display: none; }
+.sales-board-card { padding: 20px; }
+.sales-toolbar { margin-bottom: 18px; }
+.sales-board {
+  display: grid;
+  grid-auto-columns: minmax(245px, 1fr);
+  grid-auto-flow: column;
+  gap: 13px;
+  overflow-x: auto;
+  padding: 2px 2px 12px;
+  align-items: start;
+  scrollbar-width: thin;
+}
+.sales-column {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f7f9f7;
+}
+.sales-column-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 54px;
+}
+.sales-column-header h3 {
+  margin: 0;
+  color: var(--green);
+  font-size: 13px;
+}
+.sales-column-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.sales-column-count {
+  min-width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--green-light);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+}
+.sales-column-total {
+  margin: 10px 0 12px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 700;
+}
+.sales-column-total span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+.sales-column-cards {
+  display: grid;
+  gap: 10px;
+  min-height: 75px;
+}
+.sales-opportunity {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #e3e9e4;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(26, 54, 42, 0.035);
+}
+.sales-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.sales-card-label {
+  color: #8a948d;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.sales-card-top .icon-button {
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 7px;
+  font-size: 10px;
+}
+.sales-opportunity h4 {
+  margin: 10px 0 3px;
+  color: var(--green);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.sales-client-name,
+.sales-quote-name {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.sales-expected-value {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--gold-light);
+}
+.sales-expected-value small,
+.sales-card-detail small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+.sales-expected-value strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--green);
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.sales-card-detail {
+  margin-top: 10px;
+}
+.sales-card-detail span {
+  display: block;
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.sales-move-label {
+  display: block;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.sales-move-label select {
+  margin-top: 5px;
+  padding: 8px;
+  font-size: 11px;
+}
+.sales-delete {
+  width: 100%;
+  min-height: 32px;
+  margin-top: 9px;
+  padding: 7px 10px;
+  color: var(--danger);
+  font-size: 10px;
+}
+.sales-column-empty {
+  padding: 18px 8px;
+  border: 1px dashed #d9e1da;
+  border-radius: 8px;
+  color: #8a948d;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.5;
+}
+@media (max-width: 700px) {
+  .sales-summary-grid { grid-template-columns: 1fr; }
+  .sales-summary-card { padding: 15px 17px; }
+  .sales-board { grid-auto-columns: minmax(235px, 82vw); }
+  .sales-board-card { padding: 14px; }
+}
