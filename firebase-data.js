@@ -279,6 +279,109 @@ export async function initializeCloudData(uid, password, confirmation = "") {
   setStatus("Dados criptografados e sincronizados", "ok");
 }
 
+
+const BACKUP_FORMAT = "lr-interiores-encrypted-backup";
+const BACKUP_VERSION = 1;
+const BACKUP_ITERATIONS = 310000;
+
+function validateBackupStores(value) {
+  if (!value || typeof value !== "object") throw new Error("O conteúdo do backup não é válido.");
+  for (const storageKey of Object.keys(stores)) {
+    if (!Array.isArray(value[storageKey])) {
+      throw new Error("O backup não contém uma lista válida para " + stores[storageKey] + ".");
+    }
+    const ids = new Set();
+    for (const record of value[storageKey]) {
+      if (!record || typeof record.id !== "string" || !record.id || ids.has(record.id)) {
+        throw new Error("O backup contém um registro inválido ou duplicado em " + stores[storageKey] + ".");
+      }
+      ids.add(record.id);
+    }
+  }
+  return true;
+}
+
+export async function createEncryptedBackup(password) {
+  if (!activeKey || !originalGetItem) throw fail("CRM_LOCKED", "Desbloqueie o CRM antes de criar um backup.");
+  if (typeof password !== "string" || password.length < 10) {
+    throw fail("WEAK_BACKUP_PASSWORD", "Use uma senha de backup com pelo menos 10 caracteres.");
+  }
+  await Promise.all([...queues.values()]);
+  if (lastWriteError) throw fail("SYNC_PENDING", "Há alterações que não foram confirmadas na nuvem. Verifique a sincronização antes de criar o backup.");
+
+  const payload = {};
+  for (const storageKey of Object.keys(stores)) {
+    const serialized = memoryStores.get(storageKey) ?? originalGetItem(storageKey);
+    let records = [];
+    if (serialized) records = JSON.parse(serialized);
+    payload[storageKey] = records;
+  }
+  validateBackupStores(payload);
+
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const backupKey = await deriveKey(password, salt);
+  const encrypted = await encryptText(backupKey, JSON.stringify({
+    format: BACKUP_FORMAT,
+    version: BACKUP_VERSION,
+    createdAt: new Date().toISOString(),
+    stores: payload
+  }));
+  return JSON.stringify({
+    format: BACKUP_FORMAT,
+    version: BACKUP_VERSION,
+    kdf: "PBKDF2-SHA-256",
+    iterations: BACKUP_ITERATIONS,
+    salt: bytesToBase64(salt),
+    encrypted
+  }, null, 2);
+}
+
+export async function restoreEncryptedBackup(fileContents, password, uid) {
+  if (!activeKey || !originalGetItem) throw fail("CRM_LOCKED", "Desbloqueie o CRM antes de restaurar um backup.");
+  if (!uid) throw fail("NOT_AUTHENTICATED", "Usuário não autenticado.");
+  if (typeof password !== "string" || password.length < 10) {
+    throw fail("WEAK_BACKUP_PASSWORD", "Informe a senha usada para proteger este backup.");
+  }
+  await Promise.all([...queues.values()]);
+
+  let backup;
+  try {
+    backup = JSON.parse(fileContents);
+  } catch {
+    throw fail("INVALID_BACKUP_FILE", "O arquivo selecionado não é um backup JSON válido.");
+  }
+  if (!backup || backup.format !== BACKUP_FORMAT || backup.version !== BACKUP_VERSION ||
+      backup.kdf !== "PBKDF2-SHA-256" || backup.iterations !== BACKUP_ITERATIONS ||
+      typeof backup.salt !== "string" || !backup.encrypted?.iv || !backup.encrypted?.data) {
+    throw fail("INVALID_BACKUP_FORMAT", "Formato de backup não reconhecido ou versão incompatível.");
+  }
+
+  let decoded;
+  try {
+    const backupKey = await deriveKey(password, base64ToBytes(backup.salt));
+    decoded = JSON.parse(await decryptText(backupKey, backup.encrypted));
+  } catch {
+    throw fail("WRONG_BACKUP_PASSWORD", "Não foi possível abrir o backup. Confira a senha e tente novamente.");
+  }
+  if (!decoded || decoded.format !== BACKUP_FORMAT || decoded.version !== BACKUP_VERSION) {
+    throw fail("INVALID_BACKUP_CONTENT", "O conteúdo descriptografado do backup não é válido.");
+  }
+  validateBackupStores(decoded.stores);
+
+  // Validate every store before writing anything. If interrupted, importing the same backup again is safe.
+  for (const [storageKey, storeName] of Object.entries(stores)) {
+    await writeEncryptedStore(uid, storeName, decoded.stores[storageKey], activeKey);
+  }
+  for (const storageKey of Object.keys(stores)) {
+    memoryStores.set(storageKey, JSON.stringify(decoded.stores[storageKey]));
+  }
+  lastWriteError = false;
+  setStatus("Backup restaurado e sincronizado", "ok");
+  return { createdAt: decoded.createdAt, counts: Object.fromEntries(
+    Object.keys(stores).map((storageKey) => [storageKey, decoded.stores[storageKey].length])
+  ) };
+}
+
 export function lockCloudData() {
   activeKey = null;
   memoryStores.clear();
