@@ -465,7 +465,32 @@
               <h2>Projetos e entregas</h2>
               <p id="productionListCount">0 projetos</p>
             </div>
-            <input id="productionSearch" class="search-input" placeholder="Buscar projeto ou cliente..." aria-label="Buscar projetos de produção">
+            <div class="production-toolbar-actions">
+              <input id="productionSearch" class="search-input" placeholder="Buscar projeto ou cliente..." aria-label="Buscar projetos de produção">
+              <div class="production-view-switch" role="group" aria-label="Visualização dos projetos">
+                <button type="button" class="button button-outline active" id="productionListViewBtn" aria-pressed="true">Lista</button>
+                <button type="button" class="button button-outline" id="productionCalendarViewBtn" aria-pressed="false">Calendário</button>
+              </div>
+            </div>
+          </div>
+          <div id="productionCalendar" class="production-calendar" hidden>
+            <div class="production-calendar-toolbar">
+              <div>
+                <h3 id="productionCalendarMonth">Calendário</h3>
+                <p>Inícios, prazos e entregas dos projetos</p>
+              </div>
+              <div class="production-calendar-navigation">
+                <button type="button" class="button button-outline" id="productionCalendarPrev" aria-label="Mês anterior">‹</button>
+                <button type="button" class="button button-outline" id="productionCalendarToday">Hoje</button>
+                <button type="button" class="button button-outline" id="productionCalendarNext" aria-label="Próximo mês">›</button>
+              </div>
+            </div>
+            <div class="production-calendar-legend">
+              <span><i class="calendar-dot calendar-dot-start"></i>Início</span>
+              <span><i class="calendar-dot calendar-dot-deadline"></i>Prazo de entrega</span>
+              <span><i class="calendar-dot calendar-dot-delivered"></i>Entregue</span>
+            </div>
+            <div id="productionCalendarGrid" class="production-calendar-grid" aria-label="Calendário mensal de produção"></div>
           </div>
           <div id="productionList" class="production-list"></div>
         </div>
