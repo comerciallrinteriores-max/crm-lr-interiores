@@ -510,7 +510,7 @@
             <h2>Controle financeiro</h2>
             <p>Registre o que entrou, o que saiu e o que ainda está pendente.</p>
           </div>
-          <button class="button button-primary" id="newFinanceEntryBtn">+ Novo lançamento</button>
+          <div class="finance-heading-actions"><button class="button button-outline" id="importWonSalesBtn">Importar vendas concluídas</button><button class="button button-primary" id="newFinanceEntryBtn">+ Novo lançamento</button></div>
         </div>
 
         <div class="finance-notice">
@@ -576,15 +576,20 @@
             <label>Vencimento / data prevista *
               <input id="financeDueDate" type="date" required>
             </label>
-            <label>Status
+            <label id="financeStatusField">Status
               <select id="financeStatus">
                 <option value="pending">Pendente</option>
                 <option value="paid">Pago / recebido</option>
               </select>
             </label>
-            <label>Data do pagamento / recebimento
+            <label id="financePaidDateField">Data do pagamento / recebimento
               <input id="financePaidDate" type="date">
             </label>
+            <label id="financePaidAmountField" hidden>Valor já recebido (R$)
+              <input id="financePaidAmount" type="number" min="0" step="0.01" value="0" placeholder="0,00">
+              <span class="finance-field-help">Informe o total recebido até agora. O restante ficará pendente.</span>
+            </label>
+            <div id="financeLinkedSaleInfo" class="finance-linked-sale-info full-width" hidden></div>
             <label>Cliente relacionado
               <select id="financeClient">
                 <option value="">Sem cliente vinculado</option>
