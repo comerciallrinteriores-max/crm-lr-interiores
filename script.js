@@ -1739,7 +1739,7 @@ function loadFinanceEntries() {
       const saleId = typeof entry.saleId === "string" ? entry.saleId : "";
       const payments = saleId && Array.isArray(entry.payments)
         ? entry.payments.filter((payment) =>
-            payment && Number(payment.amount) > 0 && /^\\d{4}-\\d{2}-\\d{2}$/.test(payment.date || "")
+            payment && Number(payment.amount) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(payment.date || "")
           ).map((payment) => ({
             amount: Math.max(0, Number(payment.amount) || 0),
             date: payment.date
