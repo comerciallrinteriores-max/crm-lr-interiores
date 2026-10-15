@@ -8,12 +8,14 @@
 
 const STORAGE_KEY = "lr-interiores-crm-v1";
 const QUOTES_STORAGE_KEY = "lr-interiores-orcamentos-v1";
+const FINANCE_STORAGE_KEY = "lr-interiores-financeiro-v1";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => document.querySelectorAll(selector);
 
 let clients = loadClients();
 let quotes = loadQuotes();
+let financeEntries = loadFinanceEntries();
 
 /* ---------- Armazenamento de clientes ---------- */
 function loadClients() {
@@ -142,6 +144,7 @@ function navigateTo(pageName) {
   if (pageName === "orcamentos") renderQuotes();
   if (pageName === "vendas") renderSales();
   if (pageName === "producao") renderProduction();
+  if (pageName === "financeiro") renderFinance();
 }
 
 $$(".nav-item").forEach((button) => {
@@ -1715,7 +1718,260 @@ $("#productionList").addEventListener("change", (event) => {
   if (select) updateProductionStatus(select.dataset.productionStatus, select.value);
 });
 
+
+/* ---------- Financeiro ---------- */
+function localISODate(date = new Date()) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+}
+
+function loadFinanceEntries() {
+  try {
+    const saved = localStorage.getItem(FINANCE_STORAGE_KEY);
+    const parsed = saved ? JSON.parse(saved) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry) =>
+      entry &&
+      typeof entry.id === "string" &&
+      typeof entry.description === "string"
+    ).map((entry) => ({
+      ...entry,
+      type: entry.type === "expense" ? "expense" : "income",
+      category: typeof entry.category === "string" ? entry.category : "Outros",
+      amount: Math.max(0, Number(entry.amount) || 0),
+      dueDate: typeof entry.dueDate === "string" ? entry.dueDate : "",
+      status: entry.status === "paid" ? "paid" : "pending",
+      paidDate: typeof entry.paidDate === "string" ? entry.paidDate : "",
+      clientId: typeof entry.clientId === "string" ? entry.clientId : "",
+      clientName: typeof entry.clientName === "string" ? entry.clientName : "",
+      notes: typeof entry.notes === "string" ? entry.notes : ""
+    }));
+  } catch (error) {
+    console.error("Não foi possível carregar o financeiro:", error);
+    return [];
+  }
+}
+
+function saveFinanceEntries() {
+  try {
+    localStorage.setItem(FINANCE_STORAGE_KEY, JSON.stringify(financeEntries));
+    return true;
+  } catch (error) {
+    console.error("Não foi possível salvar os lançamentos financeiros:", error);
+    alert("Não foi possível salvar os lançamentos neste navegador. Verifique o espaço disponível ou as configurações de privacidade.");
+    return false;
+  }
+}
+
+function financeEffectiveDate(entry) {
+  return entry.status === "paid" && entry.paidDate
+    ? entry.paidDate
+    : entry.dueDate;
+}
+
+function formatFinanceDate(dateValue) {
+  if (!dateValue) return "Não informada";
+  const date = new Date(dateValue + "T12:00:00");
+  return Number.isNaN(date.getTime()) ? "Não informada" : date.toLocaleDateString("pt-BR");
+}
+
+function renderFinanceClientOptions(selectedId = $("#financeClient").value) {
+  const select = $("#financeClient");
+  select.innerHTML = '<option value="">Sem cliente vinculado</option>' +
+    clients.map((client) => `<option value="${escapeHTML(client.id)}">${escapeHTML(client.name)}</option>`).join("");
+  select.value = clients.some((client) => client.id === selectedId) ? selectedId : "";
+}
+
+function openFinanceForm(entry = null) {
+  const form = $("#financeForm");
+  form.reset();
+  $("#financeId").value = entry?.id || "";
+  $("#financeFormTitle").textContent = entry ? "Editar lançamento" : "Novo lançamento";
+  $("#financeType").value = entry?.type || "income";
+  $("#financeDescription").value = entry?.description || "";
+  $("#financeCategory").value = entry?.category || "Venda / serviço";
+  $("#financeAmount").value = entry ? String(entry.amount) : "";
+  $("#financeDueDate").value = entry?.dueDate || localISODate();
+  $("#financeStatus").value = entry?.status || "pending";
+  $("#financePaidDate").value = entry?.paidDate || (entry?.status === "paid" ? localISODate() : "");
+  $("#financeNotes").value = entry?.notes || "";
+  renderFinanceClientOptions(entry?.clientId || "");
+  form.hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#financeDescription").focus({ preventScroll: true });
+}
+
+function closeFinanceForm() {
+  $("#financeForm").reset();
+  $("#financeId").value = "";
+  $("#financeForm").hidden = true;
+}
+
+function renderFinance(searchTerm = $("#financeSearch").value) {
+  const month = $("#financeMonth").value || localISODate().slice(0, 7);
+  const normalizedSearch = (searchTerm || "").trim().toLocaleLowerCase("pt-BR");
+  const monthEntries = financeEntries.filter((entry) => {
+    const effectiveDate = financeEffectiveDate(entry);
+    return effectiveDate.startsWith(month);
+  });
+  const received = monthEntries
+    .filter((entry) => entry.type === "income" && entry.status === "paid")
+    .reduce((sum, entry) => sum + entry.amount, 0);
+  const toReceive = financeEntries
+    .filter((entry) => entry.type === "income" && entry.status === "pending" && entry.dueDate.startsWith(month))
+    .reduce((sum, entry) => sum + entry.amount, 0);
+  const expensesPaid = monthEntries
+    .filter((entry) => entry.type === "expense" && entry.status === "paid")
+    .reduce((sum, entry) => sum + entry.amount, 0);
+
+  $("#financeReceived").textContent = formatBRL(received);
+  $("#financeToReceive").textContent = formatBRL(toReceive);
+  $("#financeExpensesPaid").textContent = formatBRL(expensesPaid);
+  $("#financeBalance").textContent = formatBRL(received - expensesPaid);
+  $("#financeBalance").classList.toggle("negative-value", received - expensesPaid < 0);
+
+  const filtered = financeEntries.filter((entry) => {
+    const date = financeEffectiveDate(entry);
+    const matchesMonth = date.startsWith(month) ||
+      (entry.status === "pending" && entry.dueDate.startsWith(month));
+    const searchable = `${entry.description} ${entry.category} ${entry.clientName || ""} ${entry.notes || ""}`
+      .toLocaleLowerCase("pt-BR");
+    return matchesMonth && searchable.includes(normalizedSearch);
+  }).sort((a, b) => (financeEffectiveDate(b) || "").localeCompare(financeEffectiveDate(a) || ""));
+
+  $("#financeCount").textContent = `${filtered.length} ${filtered.length === 1 ? "lançamento" : "lançamentos"}`;
+  const list = $("#financeList");
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="list-empty">${financeEntries.length === 0
+      ? "Nenhum lançamento financeiro ainda. Clique em “+ Novo lançamento” para começar."
+      : "Nenhum lançamento encontrado neste mês para essa busca."}</div>`;
+    return;
+  }
+
+  const today = localISODate();
+  list.innerHTML = filtered.map((entry) => {
+    const isIncome = entry.type === "income";
+    const overdue = entry.status === "pending" && entry.dueDate && entry.dueDate < today;
+    const typeLabel = isIncome ? "Receita" : "Despesa";
+    const statusLabel = entry.status === "paid" ? (isIncome ? "Recebido" : "Pago") : (overdue ? "Atrasado" : "Pendente");
+    return `
+      <article class="finance-row ${isIncome ? "finance-income" : "finance-expense"}">
+        <div class="finance-row-icon" aria-hidden="true">${isIncome ? "↙" : "↗"}</div>
+        <div class="finance-row-main">
+          <div class="finance-row-title">
+            <h3>${escapeHTML(entry.description)}</h3>
+            <span class="finance-type-pill ${isIncome ? "income" : "expense"}">${typeLabel}</span>
+            <span class="finance-status-pill ${entry.status === "paid" ? "paid" : overdue ? "overdue" : "pending"}">${statusLabel}</span>
+          </div>
+          <p>${escapeHTML(entry.category)} · ${escapeHTML(entry.clientName || "Sem cliente vinculado")}</p>
+          <div class="finance-row-meta">
+            <span>${entry.status === "paid" ? "Pago/recebido em" : "Vencimento"}: ${formatFinanceDate(entry.status === "paid" ? (entry.paidDate || entry.dueDate) : entry.dueDate)}</span>
+            ${entry.notes ? `<span class="finance-row-notes">${escapeHTML(entry.notes)}</span>` : ""}
+          </div>
+        </div>
+        <div class="finance-row-side">
+          <strong class="${isIncome ? "finance-positive" : "finance-negative"}">${isIncome ? "+" : "−"} ${formatBRL(entry.amount)}</strong>
+          <div class="finance-row-actions">
+            ${entry.status === "pending" ? `<button type="button" class="button button-outline" data-finance-action="mark-paid" data-finance-id="${escapeHTML(entry.id)}">${isIncome ? "Marcar recebido" : "Marcar pago"}</button>` : `<button type="button" class="button button-outline" data-finance-action="mark-pending" data-finance-id="${escapeHTML(entry.id)}">Reabrir pendência</button>`}
+            <button type="button" class="button button-outline" data-finance-action="edit" data-finance-id="${escapeHTML(entry.id)}">Editar</button>
+            <button type="button" class="button button-outline finance-delete" data-finance-action="delete" data-finance-id="${escapeHTML(entry.id)}">Excluir</button>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+$("#newFinanceEntryBtn").addEventListener("click", () => openFinanceForm());
+$("#cancelFinanceBtn").addEventListener("click", closeFinanceForm);
+$("#cancelFinanceBtnBottom").addEventListener("click", closeFinanceForm);
+$("#financeSearch").addEventListener("input", (event) => renderFinance(event.target.value));
+$("#financeMonth").value = localISODate().slice(0, 7);
+$("#financeMonth").addEventListener("change", () => renderFinance());
+$("#financeStatus").addEventListener("change", () => {
+  if ($("#financeStatus").value === "paid" && !$("#financePaidDate").value) {
+    $("#financePaidDate").value = localISODate();
+  }
+  if ($("#financeStatus").value === "pending") $("#financePaidDate").value = "";
+});
+
+$("#financeForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const id = $("#financeId").value;
+  const description = $("#financeDescription").value.trim();
+  const amount = Number($("#financeAmount").value);
+  if (!description || !Number.isFinite(amount) || amount <= 0) {
+    alert("Informe uma descrição e um valor maior que zero.");
+    return;
+  }
+  const existing = financeEntries.find((entry) => entry.id === id);
+  const status = $("#financeStatus").value === "paid" ? "paid" : "pending";
+  const clientId = $("#financeClient").value;
+  const client = clients.find((item) => item.id === clientId);
+  const entry = {
+    id: id || createId(),
+    type: $("#financeType").value === "expense" ? "expense" : "income",
+    description,
+    category: $("#financeCategory").value,
+    amount: Math.round(amount * 100) / 100,
+    dueDate: $("#financeDueDate").value,
+    status,
+    paidDate: status === "paid" ? ($("#financePaidDate").value || localISODate()) : "",
+    clientId,
+    clientName: client ? client.name : "",
+    notes: $("#financeNotes").value.trim(),
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  const previousEntries = [...financeEntries];
+  if (id) financeEntries = financeEntries.map((item) => item.id === id ? entry : item);
+  else financeEntries.unshift(entry);
+  if (!saveFinanceEntries()) {
+    financeEntries = previousEntries;
+    return;
+  }
+  closeFinanceForm();
+  renderFinance();
+  alert(id ? "Lançamento atualizado com sucesso!" : "Lançamento salvo com sucesso!");
+});
+
+$("#financeList").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-finance-action]");
+  if (!button) return;
+  const entry = financeEntries.find((item) => item.id === button.dataset.financeId);
+  if (!entry) return;
+  const action = button.dataset.financeAction;
+  if (action === "edit") {
+    openFinanceForm(entry);
+    return;
+  }
+  if (action === "delete") {
+    if (!confirm(`Deseja realmente excluir o lançamento "${entry.description}"?`)) return;
+    const previousEntries = [...financeEntries];
+    financeEntries = financeEntries.filter((item) => item.id !== entry.id);
+    if (!saveFinanceEntries()) {
+      financeEntries = previousEntries;
+      return;
+    }
+    renderFinance();
+    return;
+  }
+  const previousEntries = [...financeEntries];
+  financeEntries = financeEntries.map((item) => {
+    if (item.id !== entry.id) return item;
+    if (action === "mark-paid") return { ...item, status: "paid", paidDate: localISODate(), updatedAt: new Date().toISOString() };
+    if (action === "mark-pending") return { ...item, status: "pending", paidDate: "", updatedAt: new Date().toISOString() };
+    return item;
+  });
+  if (!saveFinanceEntries()) {
+    financeEntries = previousEntries;
+    return;
+  }
+  renderFinance();
+});
+
 /* ---------- Inicialização ---------- */
+
 renderClients();
 renderDashboard();
 renderQuotes();
