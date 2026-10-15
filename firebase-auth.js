@@ -76,6 +76,7 @@ async function showEncryptionScreen(user) {
       ? "Digite sua senha de criptografia para desbloquear os dados protegidos. Ela é diferente da senha de login."
       : "Esta senha protegerá os dados antes de serem enviados ao Firebase. Guarde-a em segurança: sem ela, não será possível descriptografar os dados.";
     encryptionConfirmField.hidden = state.configured;
+    encryptionConfirm.required = !state.configured;
     encryptionPassword.value = "";
     encryptionConfirm.value = "";
     encryptionPassword.autocomplete = state.configured ? "current-password" : "new-password";
