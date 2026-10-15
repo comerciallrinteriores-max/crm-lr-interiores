@@ -32,6 +32,7 @@ const loginMessage = document.getElementById("loginMessage");
 const logoutButton = document.getElementById("logoutButton");
 
 let crmLoaded = false;
+let loadedUid = null;
 let submitting = false;
 
 function showLogin(message = "") {
@@ -45,15 +46,22 @@ function showLogin(message = "") {
 }
 
 async function showCRM() {
+  const user = auth.currentUser;
+  if (!user) return;
+  if (crmLoaded && loadedUid && loadedUid !== user.uid) {
+    window.location.reload();
+    return;
+  }
   authScreen.hidden = true;
   appLoading.hidden = false;
   crmApp.hidden = true;
 
   try {
     if (!crmLoaded) {
-      await initializeCloudData(auth.currentUser.uid);
+      await initializeCloudData(user.uid);
       await import("./script.js?v=20261015-5");
       crmLoaded = true;
+      loadedUid = user.uid;
     }
     appLoading.hidden = true;
     crmApp.hidden = false;
