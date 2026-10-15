@@ -140,6 +140,7 @@ function navigateTo(pageName) {
 
   if (pageName === "dashboard") renderDashboard();
   if (pageName === "orcamentos") renderQuotes();
+  if (pageName === "vendas") renderSales();
 }
 
 $$(".nav-item").forEach((button) => {
@@ -899,8 +900,295 @@ $("#quoteList").addEventListener("click", (event) => {
   }
 });
 
+/* ---------- Funil de vendas / Kanban ---------- */
+const SALES_STORAGE_KEY = "lr-interiores-funil-v1";
+
+const salesStages = [
+  { id: "lead", title: "Novo contato", description: "Oportunidades recém-chegadas" },
+  { id: "contact", title: "Contato realizado", description: "Entendimento da necessidade" },
+  { id: "proposal", title: "Proposta enviada", description: "Orçamento em avaliação" },
+  { id: "negotiation", title: "Em negociação", description: "Ajustes e fechamento" },
+  { id: "won", title: "Venda concluída", description: "Oportunidades ganhas" },
+  { id: "lost", title: "Perdida / cancelada", description: "Oportunidades encerradas" }
+];
+
+let sales = loadSales();
+
+function loadSales() {
+  try {
+    const saved = localStorage.getItem(SALES_STORAGE_KEY);
+    const parsed = saved ? JSON.parse(saved) : [];
+    if (!Array.isArray(parsed)) return [];
+
+    const validStages = salesStages.map((stage) => stage.id);
+    return parsed.filter((sale) =>
+      sale &&
+      typeof sale.id === "string" &&
+      typeof sale.title === "string"
+    ).map((sale) => ({
+      ...sale,
+      stage: validStages.includes(sale.stage) ? sale.stage : "lead",
+      clientId: typeof sale.clientId === "string" ? sale.clientId : "",
+      quoteId: typeof sale.quoteId === "string" ? sale.quoteId : "",
+      nextAction: typeof sale.nextAction === "string" ? sale.nextAction : "",
+      followupDate: typeof sale.followupDate === "string" ? sale.followupDate : "",
+      expectedValue: Math.max(0, Number(sale.expectedValue) || 0),
+      notes: typeof sale.notes === "string" ? sale.notes : ""
+    }));
+  } catch (error) {
+    console.error("Não foi possível carregar o funil de vendas:", error);
+    return [];
+  }
+}
+
+function saveSales() {
+  try {
+    localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(sales));
+    return true;
+  } catch (error) {
+    console.error("Não foi possível salvar o funil de vendas:", error);
+    alert("Não foi possível salvar as oportunidades neste navegador. Verifique o espaço disponível ou as configurações de privacidade.");
+    return false;
+  }
+}
+
+function renderSalesOptions(selectedClientId = $("#saleClient").value, selectedQuoteId = $("#saleQuote").value) {
+  const clientSelect = $("#saleClient");
+  const quoteSelect = $("#saleQuote");
+
+  clientSelect.innerHTML = '<option value="">Sem cliente vinculado</option>' +
+    clients.map((client) => `<option value="${escapeHTML(client.id)}">${escapeHTML(client.name)}</option>`).join("");
+  clientSelect.value = clients.some((client) => client.id === selectedClientId) ? selectedClientId : "";
+
+  const availableQuotes = quotes.filter((quote) =>
+    !clientSelect.value || !quote.clientId || quote.clientId === clientSelect.value
+  );
+  quoteSelect.innerHTML = '<option value="">Sem orçamento vinculado</option>' +
+    availableQuotes.map((quote) => {
+      const clientLabel = quote.clientName ? ` — ${quote.clientName}` : "";
+      return `<option value="${escapeHTML(quote.id)}">${escapeHTML(quote.name)}${escapeHTML(clientLabel)} · ${formatBRL(quote.price)}</option>`;
+    }).join("");
+  quoteSelect.value = availableQuotes.some((quote) => quote.id === selectedQuoteId) ? selectedQuoteId : "";
+}
+
+function openSaleForm(sale = null) {
+  const form = $("#saleForm");
+  form.reset();
+  $("#saleId").value = "";
+  $("#saleStage").value = "lead";
+  $("#saleFormTitle").textContent = sale ? "Editar oportunidade" : "Nova oportunidade";
+  renderSalesOptions("", "");
+
+  if (sale) {
+    $("#saleId").value = sale.id;
+    $("#saleTitle").value = sale.title || "";
+    $("#saleStage").value = sale.stage || "lead";
+    $("#saleClient").value = sale.clientId || "";
+    renderSalesOptions(sale.clientId || "", sale.quoteId || "");
+    $("#saleNextAction").value = sale.nextAction || "";
+    $("#saleFollowupDate").value = sale.followupDate || "";
+    $("#saleExpectedValue").value = String(sale.expectedValue ?? "");
+    $("#saleNotes").value = sale.notes || "";
+  }
+
+  form.hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#saleTitle").focus({ preventScroll: true });
+}
+
+function closeSaleForm() {
+  $("#saleForm").hidden = true;
+  $("#saleForm").reset();
+  $("#saleId").value = "";
+}
+
+$("#newSaleBtn").addEventListener("click", () => openSaleForm());
+$("#cancelSaleBtn").addEventListener("click", closeSaleForm);
+$("#cancelSaleBtnBottom").addEventListener("click", closeSaleForm);
+
+$("#saleClient").addEventListener("change", () => {
+  renderSalesOptions($("#saleClient").value, $("#saleQuote").value);
+});
+
+$("#saleQuote").addEventListener("change", () => {
+  const quote = quotes.find((item) => item.id === $("#saleQuote").value);
+  if (!quote) return;
+  if (quote.clientId) {
+    $("#saleClient").value = quote.clientId;
+    renderSalesOptions(quote.clientId, quote.id);
+  }
+  $("#saleExpectedValue").value = Number(quote.price || 0).toFixed(2);
+  if (!$("#saleTitle").value.trim()) $("#saleTitle").value = quote.name || "";
+});
+
+$("#saleForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const id = $("#saleId").value;
+  const title = $("#saleTitle").value.trim();
+  if (!title) {
+    alert("Informe o nome da oportunidade.");
+    return;
+  }
+
+  const existing = sales.find((sale) => sale.id === id);
+  const clientId = $("#saleClient").value;
+  const quoteId = $("#saleQuote").value;
+  const client = clients.find((item) => item.id === clientId);
+  const quote = quotes.find((item) => item.id === quoteId);
+  const opportunity = {
+    id: id || createId(),
+    title,
+    stage: $("#saleStage").value,
+    clientId,
+    clientName: client ? client.name : "",
+    quoteId,
+    quoteName: quote ? quote.name : "",
+    nextAction: $("#saleNextAction").value.trim(),
+    followupDate: $("#saleFollowupDate").value,
+    expectedValue: Math.max(0, Number($("#saleExpectedValue").value) || 0),
+    notes: $("#saleNotes").value.trim(),
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  const previousSales = [...sales];
+  if (id) {
+    sales = sales.map((sale) => sale.id === id ? opportunity : sale);
+  } else {
+    sales.unshift(opportunity);
+  }
+
+  if (!saveSales()) {
+    sales = previousSales;
+    return;
+  }
+
+  closeSaleForm();
+  renderSales();
+});
+
+function formatSalesDate(value) {
+  if (!value) return "";
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("pt-BR");
+}
+
+function moveSaleToStage(saleId, stageId) {
+  if (!salesStages.some((stage) => stage.id === stageId)) return;
+  const previousSales = [...sales];
+  sales = sales.map((sale) => sale.id === saleId
+    ? { ...sale, stage: stageId, updatedAt: new Date().toISOString() }
+    : sale
+  );
+  if (!saveSales()) {
+    sales = previousSales;
+    return;
+  }
+  renderSales();
+}
+
+function renderSales(searchTerm = $("#salesSearch").value) {
+  renderSalesOptions();
+  const normalizedSearch = (searchTerm || "").trim().toLocaleLowerCase("pt-BR");
+  const filteredSales = sales.filter((sale) => {
+    const client = clients.find((item) => item.id === sale.clientId);
+    const clientName = client?.name || sale.clientName || "";
+    return `${sale.title} ${clientName} ${sale.nextAction} ${sale.notes}`
+      .toLocaleLowerCase("pt-BR").includes(normalizedSearch);
+  });
+
+  const openSales = sales.filter((sale) => !["won", "lost"].includes(sale.stage));
+  $("#salesOpenCount").textContent = openSales.length;
+  $("#salesOpenValue").textContent = formatBRL(openSales.reduce((sum, sale) => sum + sale.expectedValue, 0));
+  $("#salesWonCount").textContent = sales.filter((sale) => sale.stage === "won").length;
+  $("#salesBoardCount").textContent = `${filteredSales.length} ${filteredSales.length === 1 ? "oportunidade" : "oportunidades"}`;
+
+  const board = $("#salesBoard");
+  board.innerHTML = salesStages.map((stage) => {
+    const stageSales = filteredSales.filter((sale) => sale.stage === stage.id);
+    const stageValue = stageSales.reduce((sum, sale) => sum + sale.expectedValue, 0);
+    return `
+      <section class="sales-column" data-stage="${stage.id}">
+        <header class="sales-column-header">
+          <div>
+            <h3>${escapeHTML(stage.title)}</h3>
+            <p>${escapeHTML(stage.description)}</p>
+          </div>
+          <span class="sales-column-count">${stageSales.length}</span>
+        </header>
+        <div class="sales-column-total">${formatBRL(stageValue)} <span>previstos</span></div>
+        <div class="sales-column-cards">
+          ${stageSales.length ? stageSales.map((sale) => {
+            const client = clients.find((item) => item.id === sale.clientId);
+            const clientName = client?.name || sale.clientName || "Sem cliente vinculado";
+            const stageOptions = salesStages.map((option) =>
+              `<option value="${option.id}" ${option.id === sale.stage ? "selected" : ""}>${escapeHTML(option.title)}</option>`
+            ).join("");
+            return `
+              <article class="sales-opportunity">
+                <div class="sales-card-top">
+                  <span class="sales-card-label">OPORTUNIDADE</span>
+                  <button type="button" class="icon-button" data-sale-edit="${escapeHTML(sale.id)}" aria-label="Editar ${escapeHTML(sale.title)}">Editar</button>
+                </div>
+                <h4>${escapeHTML(sale.title)}</h4>
+                <p class="sales-client-name">${escapeHTML(clientName)}</p>
+                ${sale.quoteName ? `<p class="sales-quote-name">Orçamento: ${escapeHTML(sale.quoteName)}</p>` : ""}
+                <div class="sales-expected-value">
+                  <small>Valor previsto</small>
+                  <strong>${formatBRL(sale.expectedValue)}</strong>
+                </div>
+                ${sale.nextAction ? `<div class="sales-card-detail"><small>Próxima ação</small><span>${escapeHTML(sale.nextAction)}</span></div>` : ""}
+                ${sale.followupDate ? `<div class="sales-card-detail"><small>Próximo contato</small><span>${escapeHTML(formatSalesDate(sale.followupDate))}</span></div>` : ""}
+                <label class="sales-move-label">Mover para
+                  <select data-sale-stage="${escapeHTML(sale.id)}" aria-label="Mover ${escapeHTML(sale.title)} para outra etapa">${stageOptions}</select>
+                </label>
+                <button type="button" class="button button-outline sales-delete" data-sale-delete="${escapeHTML(sale.id)}">Excluir</button>
+              </article>
+            `;
+          }).join("") : '<div class="sales-column-empty">Nenhuma oportunidade nesta etapa.</div>'}
+        </div>
+      </section>
+    `;
+  }).join("");
+}
+
+$("#salesSearch").addEventListener("input", (event) => renderSales(event.target.value));
+
+$("#salesBoard").addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-sale-edit]");
+  const deleteButton = event.target.closest("[data-sale-delete]");
+
+  if (editButton) {
+    const sale = sales.find((item) => item.id === editButton.dataset.saleEdit);
+    if (sale) openSaleForm(sale);
+    return;
+  }
+
+  if (deleteButton) {
+    const sale = sales.find((item) => item.id === deleteButton.dataset.saleDelete);
+    if (!sale) return;
+    if (!confirm(`Deseja realmente excluir a oportunidade "${sale.title}"?`)) return;
+
+    const previousSales = [...sales];
+    sales = sales.filter((item) => item.id !== sale.id);
+    if (!saveSales()) {
+      sales = previousSales;
+      return;
+    }
+    renderSales();
+  }
+});
+
+$("#salesBoard").addEventListener("change", (event) => {
+  const select = event.target.closest("[data-sale-stage]");
+  if (select) moveSaleToStage(select.dataset.saleStage, select.value);
+});
+
 /* ---------- Inicialização ---------- */
 renderClients();
 renderDashboard();
 renderQuotes();
 updateQuoteCalculations();
+renderSales();
