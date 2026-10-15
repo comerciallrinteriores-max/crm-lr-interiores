@@ -198,3 +198,40 @@
   .finance-row-actions { justify-content: flex-start; }
   .finance-row-actions .button { padding: 7px 8px; }
 }
+
+/* Integração do financeiro com vendas concluídas */
+.finance-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+.finance-field-help {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.finance-linked-sale-info {
+  padding: 12px 14px;
+  border: 1px solid #d6e5da;
+  border-radius: 10px;
+  background: #f5faf6;
+  color: #42634c;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.finance-linked-sale-info[hidden],
+#financePaidAmountField[hidden],
+#financeStatusField[hidden],
+#financePaidDateField[hidden] { display: none; }
+.finance-status-pill.partial {
+  background: #e6eff9;
+  color: #315d8c;
+}
+@media (max-width: 650px) {
+  .finance-heading-actions { width: 100%; justify-content: stretch; }
+  .finance-heading-actions .button { flex: 1 1 auto; }
+}
