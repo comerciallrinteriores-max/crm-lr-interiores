@@ -1737,8 +1737,18 @@ function loadFinanceEntries() {
     ).map((entry) => {
       const amount = Math.max(0, Number(entry.amount) || 0);
       const saleId = typeof entry.saleId === "string" ? entry.saleId : "";
+      const payments = saleId && Array.isArray(entry.payments)
+        ? entry.payments.filter((payment) =>
+            payment && Number(payment.amount) > 0 && /^\\d{4}-\\d{2}-\\d{2}$/.test(payment.date || "")
+          ).map((payment) => ({
+            amount: Math.max(0, Number(payment.amount) || 0),
+            date: payment.date
+          }))
+        : (saleId && Number(entry.paidAmount) > 0
+          ? [{ amount: Math.max(0, Number(entry.paidAmount) || 0), date: entry.paidDate || entry.dueDate }]
+          : []);
       const paidAmount = saleId
-        ? Math.min(amount, Math.max(0, Number(entry.paidAmount) || 0))
+        ? Math.min(amount, payments.reduce((sum, payment) => sum + payment.amount, 0))
         : (entry.status === "paid" ? amount : 0);
       const status = saleId
         ? (paidAmount >= amount && amount > 0 ? "paid" : paidAmount > 0 ? "partial" : "pending")
@@ -1749,6 +1759,7 @@ function loadFinanceEntries() {
         category: typeof entry.category === "string" ? entry.category : "Outros",
         amount,
         paidAmount,
+        payments,
         saleId,
         status,
         dueDate: typeof entry.dueDate === "string" ? entry.dueDate : "",
@@ -1776,9 +1787,21 @@ function saveFinanceEntries() {
 }
 
 function financeEffectiveDate(entry) {
+  if (entry.saleId && Array.isArray(entry.payments) && entry.payments.length) {
+    return entry.payments[entry.payments.length - 1].date || entry.dueDate;
+  }
   return (entry.status === "paid" || entry.status === "partial") && entry.paidDate
     ? entry.paidDate
     : entry.dueDate;
+}
+
+function financeReceivedInMonth(entry, month) {
+  if (entry.type !== "income") return 0;
+  if (!entry.saleId) {
+    return entry.status === "paid" && financeEffectiveDate(entry).startsWith(month) ? entry.amount : 0;
+  }
+  return (entry.payments || []).reduce((sum, payment) =>
+    payment.date.startsWith(month) ? sum + payment.amount : sum, 0);
 }
 
 function financeReceivedAmount(entry) {
@@ -1819,15 +1842,16 @@ function openFinanceForm(entry = null) {
   $("#financeAmount").value = entry ? String(entry.amount) : "";
   $("#financeDueDate").value = entry?.dueDate || localISODate();
   $("#financeStatus").value = entry?.status === "paid" ? "paid" : "pending";
-  $("#financePaidDate").value = entry?.paidDate || "";
-  $("#financePaidAmount").value = String(entry?.paidAmount || 0);
+  $("#financePaidDate").value = localISODate();
+  $("#financePaidAmount").value = "";
   $("#financeNotes").value = entry?.notes || "";
   renderFinanceClientOptions(entry?.clientId || "");
 
   const linkedSale = Boolean(entry?.saleId);
   $("#financePaidAmountField").hidden = !linkedSale;
   $("#financeStatusField").hidden = linkedSale;
-  $("#financePaidDateField").hidden = linkedSale ? !(Number(entry?.paidAmount) > 0) : false;
+  $("#financePaidDateField").hidden = false;
+  if (linkedSale) $("#financePaidDateField").querySelector("label");
   $("#financePaidAmount").max = entry ? String(entry.amount) : "";
   const linkedInfo = $("#financeLinkedSaleInfo");
   linkedInfo.hidden = !linkedSale;
@@ -1905,12 +1929,12 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
   const normalizedSearch = (searchTerm || "").trim().toLocaleLowerCase("pt-BR");
   const monthEntries = financeEntries.filter((entry) => {
     const effectiveDate = financeEffectiveDate(entry);
-    return effectiveDate.startsWith(month) ||
+    const hasPaymentThisMonth = entry.saleId && (entry.payments || []).some((payment) => payment.date.startsWith(month));
+    return effectiveDate.startsWith(month) || hasPaymentThisMonth ||
       (entry.status !== "paid" && entry.dueDate.startsWith(month));
   });
-  const received = monthEntries
-    .filter((entry) => entry.type === "income" && financeEffectiveDate(entry).startsWith(month))
-    .reduce((sum, entry) => sum + financeReceivedAmount(entry), 0);
+  const received = financeEntries
+    .reduce((sum, entry) => sum + financeReceivedInMonth(entry, month), 0);
   const toReceive = financeEntries
     .filter((entry) => entry.type === "income" && entry.status !== "paid" && entry.dueDate.startsWith(month))
     .reduce((sum, entry) => sum + financeOutstandingAmount(entry), 0);
@@ -1926,7 +1950,8 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
 
   const filtered = financeEntries.filter((entry) => {
     const effectiveDate = financeEffectiveDate(entry);
-    const matchesMonth = effectiveDate.startsWith(month) ||
+    const hasPaymentThisMonth = entry.saleId && (entry.payments || []).some((payment) => payment.date.startsWith(month));
+    const matchesMonth = effectiveDate.startsWith(month) || hasPaymentThisMonth ||
       (entry.status !== "paid" && entry.dueDate.startsWith(month));
     const searchable = `${entry.description} ${entry.category} ${entry.clientName || ""} ${entry.notes || ""}`
       .toLocaleLowerCase("pt-BR");
@@ -1954,7 +1979,7 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
       : entry.status === "partial" ? "Pago parcialmente" : (overdue ? "Atrasado" : "Pendente");
     const statusClass = entry.status === "paid" ? "paid" : entry.status === "partial" ? "partial" : overdue ? "overdue" : "pending";
     const paymentDetails = entry.saleId
-      ? `<span>Recebido: <strong>${formatBRL(receivedAmount)}</strong></span><span>Restante: <strong>${formatBRL(outstanding)}</strong></span>`
+      ? `<span>Recebido no total: <strong>${formatBRL(receivedAmount)}</strong></span><span>Restante: <strong>${formatBRL(outstanding)}</strong></span>`
       : "";
     return `
       <article class="finance-row ${isIncome ? "finance-income" : "finance-expense"}">
@@ -2016,18 +2041,24 @@ $("#financeForm").addEventListener("submit", (event) => {
   let paidAmount = 0;
   let status = $("#financeStatus").value === "paid" ? "paid" : "pending";
   let paidDate = status === "paid" ? ($("#financePaidDate").value || localISODate()) : "";
+  let newPaymentAmount = 0;
+  let payments = existing?.payments || [];
   if (linkedSale) {
-    paidAmount = Number($("#financePaidAmount").value);
-    if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > amount) {
-      alert("O valor recebido deve ficar entre R$ 0,00 e o valor total da venda.");
+    newPaymentAmount = Number($("#financePaidAmount").value || 0);
+    const alreadyReceived = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    if (!Number.isFinite(newPaymentAmount) || newPaymentAmount < 0 || alreadyReceived + newPaymentAmount > amount + 0.001) {
+      alert("O valor desta parcela não pode ultrapassar o saldo restante da venda.");
       $("#financePaidAmount").focus();
       return;
     }
-    paidAmount = Math.round(paidAmount * 100) / 100;
+    newPaymentAmount = Math.round(newPaymentAmount * 100) / 100;
+    if (newPaymentAmount > 0) {
+      const paymentDate = $("#financePaidDate").value || localISODate();
+      payments = [...payments, { amount: newPaymentAmount, date: paymentDate }];
+    }
+    paidAmount = Math.min(amount, payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0));
     status = paidAmount >= amount ? "paid" : paidAmount > 0 ? "partial" : "pending";
-    paidDate = paidAmount > 0
-      ? ($("#financePaidDate").value || (existing?.paidDate && paidAmount === Number(existing.paidAmount) ? existing.paidDate : localISODate()))
-      : "";
+    paidDate = payments.length ? payments[payments.length - 1].date : "";
   }
   const entry = {
     id: id || createId(),
@@ -2037,6 +2068,7 @@ $("#financeForm").addEventListener("submit", (event) => {
     category: $("#financeCategory").value,
     amount: Math.round(amount * 100) / 100,
     paidAmount: linkedSale ? paidAmount : 0,
+    payments: linkedSale ? payments : [],
     dueDate: $("#financeDueDate").value,
     status,
     paidDate,
@@ -2086,6 +2118,7 @@ $("#financeList").addEventListener("click", (event) => {
       ...item,
       status: "paid",
       paidAmount: item.saleId ? item.amount : item.paidAmount,
+      payments: item.saleId ? [{ amount: item.amount, date: localISODate() }] : (item.payments || []),
       paidDate: localISODate(),
       updatedAt: new Date().toISOString()
     };
@@ -2093,6 +2126,7 @@ $("#financeList").addEventListener("click", (event) => {
       ...item,
       status: "pending",
       paidAmount: item.saleId ? 0 : item.paidAmount,
+      payments: item.saleId ? [] : (item.payments || []),
       paidDate: "",
       updatedAt: new Date().toISOString()
     };
