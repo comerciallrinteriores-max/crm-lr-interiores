@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
-import { getEncryptionState, initializeCloudData, lockCloudData, createEncryptedBackup, restoreEncryptedBackup } from "./firebase-data.js?v=3";
+import { getEncryptionState, initializeCloudData, lockCloudData, changeEncryptionPassword, createEncryptedBackup, restoreEncryptedBackup } from "./firebase-data.js?v=4";
 import {
   getAuth, setPersistence, browserLocalPersistence, signInWithEmailAndPassword,
   onAuthStateChanged, signOut
@@ -41,6 +41,12 @@ const restoreBackupButton = document.getElementById("restoreBackupButton");
 const backupFileInput = document.getElementById("backupFileInput");
 const backupRestorePassword = document.getElementById("backupRestorePassword");
 const backupStatus = document.getElementById("backupStatus");
+const changePasswordForm = document.getElementById("changeEncryptionPasswordForm");
+const currentEncryptionPassword = document.getElementById("currentEncryptionPassword");
+const newEncryptionPassword = document.getElementById("newEncryptionPassword");
+const confirmNewEncryptionPassword = document.getElementById("confirmNewEncryptionPassword");
+const changeEncryptionPasswordButton = document.getElementById("changeEncryptionPasswordButton");
+const changeEncryptionPasswordStatus = document.getElementById("changeEncryptionPasswordStatus");
 
 let crmLoaded = false;
 let loadedUid = null;
@@ -171,6 +177,54 @@ encryptionForm.addEventListener("submit", async (event) => {
   await loadCRMWithEncryption(auth.currentUser, password, confirmation);
 });
 
+
+
+changePasswordForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!auth.currentUser || auth.currentUser.uid !== currentUid) return;
+  const current = currentEncryptionPassword?.value || "";
+  const next = newEncryptionPassword?.value || "";
+  const confirm = confirmNewEncryptionPassword?.value || "";
+  if (next.length < 10) {
+    changeEncryptionPasswordStatus.textContent = "A nova senha precisa ter pelo menos 10 caracteres.";
+    return;
+  }
+  if (next !== confirm) {
+    changeEncryptionPasswordStatus.textContent = "A nova senha e a confirmação não coincidem.";
+    return;
+  }
+  const confirmed = window.confirm("Antes de continuar, confirme que você guardou o backup criptografado e a senha dele. A troca vai recriptografar os dados na nuvem. Não feche nem atualize esta página até a confirmação de sucesso. Deseja continuar?");
+  if (!confirmed) return;
+  changeEncryptionPasswordButton.disabled = true;
+  changeEncryptionPasswordButton.textContent = "Alterando senha…";
+  changeEncryptionPasswordStatus.textContent = "Recriptografando os dados. Não feche esta página.";
+  const appElement = document.getElementById("crmApp");
+  if (appElement) appElement.inert = true;
+  try {
+    await changeEncryptionPassword(currentUid, current, next, confirm);
+    currentEncryptionPassword.value = "";
+    newEncryptionPassword.value = "";
+    confirmNewEncryptionPassword.value = "";
+    changeEncryptionPasswordStatus.textContent = "Senha de criptografia alterada com sucesso. Use a nova senha ao desbloquear o CRM em todos os dispositivos.";
+  } catch (error) {
+    console.error("Falha ao alterar senha de criptografia:", error.code || error.message);
+    const messages = {
+      "WRONG_ENCRYPTION_PASSWORD": "A senha atual está incorreta. Os dados não foram alterados.",
+      "WEAK_ENCRYPTION_PASSWORD": "Use uma nova senha com pelo menos 10 caracteres.",
+      "ENCRYPTION_PASSWORD_MISMATCH": "A nova senha e a confirmação não coincidem.",
+      "SAME_ENCRYPTION_PASSWORD": "Escolha uma senha diferente da atual.",
+      "SYNC_PENDING": error.message,
+      "PASSWORD_CHANGE_FAILED": error.message,
+      "PASSWORD_CHANGE_RECOVERY_REQUIRED": error.message,
+      "CRM_LOCKED": error.message
+    };
+    changeEncryptionPasswordStatus.textContent = messages[error.code] || "Não foi possível alterar a senha. Confira a conexão e o estado da sincronização.";
+  } finally {
+    if (appElement) appElement.inert = false;
+    changeEncryptionPasswordButton.disabled = false;
+    changeEncryptionPasswordButton.textContent = "Alterar senha de criptografia";
+  }
+});
 
 function setBackupStatus(message, isError = false) {
   if (!backupStatus) return;
