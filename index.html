@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="producao.css?v=20261015-2">
   <link rel="stylesheet" href="financeiro.css?v=20261015-2">
   <link rel="stylesheet" href="marketing.css?v=20261015-1">
-  <script type="module" src="firebase-auth.js?v=2"></script>
+  <script type="module" src="firebase-auth.js?v=3"></script>
   <style>[hidden] { display: none !important; }</style>
 </head>
 <body>
@@ -27,6 +27,22 @@
       <button id="loginButton" type="submit" style="width:100%;border:0;border-radius:9px;padding:13px;background:#173d32;color:#fff;font-weight:700;font-size:15px;cursor:pointer;">Entrar</button>
       <p id="loginMessage" role="status" aria-live="polite" style="min-height:20px;color:#a33131;font-size:14px;line-height:1.45;margin:14px 0 0;"></p>
       <p style="margin:12px 0 0;color:#718078;font-size:12px;line-height:1.5;">Seus dados locais não serão apagados por esta etapa.</p>
+    </form>
+  </section>
+  <section id="encryptionScreen" hidden style="min-height:100vh;align-items:center;justify-content:center;padding:24px;background:#f3f6f4;font-family:Arial,sans-serif;">
+    <form id="encryptionForm" style="width:100%;max-width:440px;background:#fff;padding:32px;border-radius:18px;box-shadow:0 12px 36px rgba(23,61,50,.12);">
+      <div style="font-size:13px;letter-spacing:2px;color:#527064;font-weight:700;margin-bottom:10px;">LR INTERIORES • SEGURANÇA</div>
+      <h1 id="encryptionTitle" style="margin:0 0 8px;color:#173d32;font-size:26px;">Senha de criptografia</h1>
+      <p id="encryptionDescription" style="margin:0 0 24px;color:#61716a;line-height:1.5;">Proteja seus dados antes de enviá-los ao Firebase.</p>
+      <label for="encryptionPassword" style="display:block;font-size:14px;font-weight:600;margin:0 0 7px;color:#263b33;">Senha de criptografia</label>
+      <input id="encryptionPassword" type="password" autocomplete="new-password" minlength="10" required style="box-sizing:border-box;width:100%;padding:12px;border:1px solid #cbd7d0;border-radius:9px;margin-bottom:16px;font-size:16px;">
+      <div id="encryptionConfirmField">
+        <label for="encryptionConfirm" style="display:block;font-size:14px;font-weight:600;margin:0 0 7px;color:#263b33;">Confirme a senha</label>
+        <input id="encryptionConfirm" type="password" autocomplete="new-password" minlength="10" required style="box-sizing:border-box;width:100%;padding:12px;border:1px solid #cbd7d0;border-radius:9px;margin-bottom:18px;font-size:16px;">
+      </div>
+      <button id="encryptionButton" type="submit" style="width:100%;border:0;border-radius:9px;padding:13px;background:#173d32;color:#fff;font-weight:700;font-size:15px;cursor:pointer;">Continuar</button>
+      <p id="encryptionMessage" role="status" aria-live="polite" style="min-height:20px;color:#a33131;font-size:14px;line-height:1.45;margin:14px 0 0;"></p>
+      <p style="margin:12px 0 0;color:#718078;font-size:12px;line-height:1.5;">A senha de criptografia não é a senha do login. Guarde-a: sem ela ou um backup válido, os dados criptografados não poderão ser recuperados.</p>
     </form>
   </section>
   <div id="appLoading" hidden style="padding:32px;text-align:center;color:#173d32;font-family:Arial,sans-serif;">Carregando seu CRM…</div>
