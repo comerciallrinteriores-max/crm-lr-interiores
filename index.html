@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="producao.css?v=20261015-2">
   <link rel="stylesheet" href="financeiro.css?v=20261015-2">
   <link rel="stylesheet" href="marketing.css?v=20261015-1">
-  <script type="module" src="firebase-auth.js?v=4"></script>
+  <script type="module" src="firebase-auth.js?v=5"></script>
   <style>[hidden] { display: none !important; }</style>
 </head>
 <body>
@@ -184,6 +184,28 @@
             <div class="form-actions" style="justify-content:flex-start;margin-top:12px;">
               <button type="button" class="button button-outline" id="restoreBackupButton">Selecionar backup para restaurar</button>
             </div>
+          </div>
+
+          <div style="border-top:1px solid var(--border);margin:20px 0 16px;padding-top:16px;">
+            <h3 style="margin:0 0 8px;">Alterar senha de criptografia do CRM</h3>
+            <p style="margin:0 0 14px;color:var(--muted);font-size:13px;line-height:1.5;">Informe a senha atual e escolha uma nova. Os dados serão recriptografados na nuvem. Não feche nem atualize esta página durante o processo.</p>
+            <form id="changeEncryptionPasswordForm">
+              <div class="form-grid">
+                <label>Senha atual do CRM
+                  <input id="currentEncryptionPassword" type="password" minlength="10" autocomplete="current-password" required>
+                </label>
+                <label>Nova senha do CRM
+                  <input id="newEncryptionPassword" type="password" minlength="10" autocomplete="new-password" required>
+                </label>
+                <label>Confirme a nova senha
+                  <input id="confirmNewEncryptionPassword" type="password" minlength="10" autocomplete="new-password" required>
+                </label>
+              </div>
+              <div class="form-actions" style="justify-content:flex-start;">
+                <button type="submit" class="button button-outline" id="changeEncryptionPasswordButton">Alterar senha de criptografia</button>
+              </div>
+            </form>
+            <p id="changeEncryptionPasswordStatus" role="status" aria-live="polite" style="margin:10px 0 0;color:var(--muted);font-size:13px;line-height:1.5;"></p>
           </div>
           <p id="backupStatus" role="status" aria-live="polite" style="margin:12px 0 0;color:var(--muted);font-size:13px;line-height:1.5;">O backup usa uma senha própria, independente do login e da senha de criptografia do CRM. Guarde o arquivo e a senha em locais seguros.</p>
           <p style="margin:8px 0 0;color:var(--muted);font-size:12px;line-height:1.5;">Restaurar substitui os dados atuais. Para evitar perdas, crie um backup dos dados atuais antes de restaurar.</p>
