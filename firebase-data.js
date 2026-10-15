@@ -125,6 +125,7 @@ export async function initializeCloudData(uid) {
   // Mantém a gravação local existente e envia as alterações à nuvem.
   const originalSetItem = localStorage.setItem.bind(localStorage);
   const queues = new Map();
+  let pendingWrites = 0;
   localStorage.setItem = function(key, value) {
     originalSetItem(key, value);
     const storeName = stores[key];
@@ -140,6 +141,7 @@ export async function initializeCloudData(uid) {
       return;
     }
 
+    pendingWrites += 1;
     setStatus("Salvando na nuvem…", "busy");
     const previous = queues.get(storeName) || Promise.resolve();
     const next = previous
@@ -147,10 +149,10 @@ export async function initializeCloudData(uid) {
       .then(() => writeStore(uid, storeName, records));
     queues.set(storeName, next);
     next.then(() => {
-      if ([...queues.values()].every((promise) => promise === next || promise)) {
-        setStatus("Dados sincronizados", "ok");
-      }
+      pendingWrites = Math.max(0, pendingWrites - 1);
+      if (pendingWrites === 0) setStatus("Dados sincronizados", "ok");
     }).catch((error) => {
+      pendingWrites = Math.max(0, pendingWrites - 1);
       console.error("Falha ao sincronizar " + storeName + ":", error);
       setStatus("Falha na nuvem — confira a conexão", "error");
     });
