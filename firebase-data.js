@@ -193,7 +193,7 @@ function installMemoryStorage(uid, key, initialValues) {
     setStatus("Salvando na nuvem…", "busy");
     const storeName = stores[storageKey];
     const previous = queues.get(storeName) || Promise.resolve();
-    const next = previous.catch(() => {}).then(() => writeEncryptedStore(uid, storeName, records, key));
+    const next = previous.catch(() => {}).then(() => writeEncryptedStore(uid, storeName, records, activeKey));
     queues.set(storeName, next);
     next.then(() => {
       pendingWrites = Math.max(0, pendingWrites - 1);
@@ -279,6 +279,94 @@ export async function initializeCloudData(uid, password, confirmation = "") {
   setStatus("Dados criptografados e sincronizados", "ok");
 }
 
+
+export async function changeEncryptionPassword(uid, currentPassword, newPassword, confirmation) {
+  if (!uid || !activeKey || !originalGetItem) {
+    throw fail("CRM_LOCKED", "Desbloqueie o CRM antes de alterar a senha.");
+  }
+  if (typeof currentPassword !== "string" || typeof newPassword !== "string" || newPassword.length < 10) {
+    throw fail("WEAK_ENCRYPTION_PASSWORD", "A nova senha precisa ter pelo menos 10 caracteres.");
+  }
+  if (newPassword !== confirmation) {
+    throw fail("ENCRYPTION_PASSWORD_MISMATCH", "A nova senha e a confirmação não coincidem.");
+  }
+  if (currentPassword === newPassword) {
+    throw fail("SAME_ENCRYPTION_PASSWORD", "A nova senha precisa ser diferente da senha atual.");
+  }
+
+  await Promise.all([...queues.values()]);
+  if (lastWriteError) {
+    throw fail("SYNC_PENDING", "Há alterações que não foram confirmadas na nuvem. Resolva a sincronização antes de trocar a senha.");
+  }
+
+  const securityDocument = securityRef(uid);
+  const securitySnapshot = await getDoc(securityDocument);
+  if (!securitySnapshot.exists()) throw fail("ENCRYPTION_STATE_MISSING", "Não foi possível encontrar a configuração de criptografia.");
+  const security = securitySnapshot.data();
+  let verifiedOldKey;
+  try {
+    verifiedOldKey = await deriveKey(currentPassword, base64ToBytes(security.salt));
+    const verifier = await decryptText(verifiedOldKey, security.verifier);
+    if (verifier !== "LR-INTERIORES-CRM-ENCRYPTION-KEY-CHECK-v1") throw new Error("Verificador inválido");
+  } catch {
+    throw fail("WRONG_ENCRYPTION_PASSWORD", "A senha atual está incorreta. Nenhum dado foi alterado.");
+  }
+
+  const oldKey = activeKey;
+  const payload = {};
+  for (const [storageKey, storeName] of Object.entries(stores)) {
+    let records;
+    try {
+      records = JSON.parse(memoryStores.get(storageKey) ?? "[]");
+    } catch {
+      throw fail("INVALID_LOCAL_DATA", "Não foi possível validar os dados de " + storeName + ". Nenhum dado foi alterado.");
+    }
+    if (!Array.isArray(records)) throw fail("INVALID_LOCAL_DATA", "Formato inválido em " + storeName + ".");
+    payload[storageKey] = records;
+  }
+  validateBackupStores(payload);
+
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const newKey = await deriveKey(newPassword, salt);
+  const verifier = await encryptText(newKey, "LR-INTERIORES-CRM-ENCRYPTION-KEY-CHECK-v1");
+  const writtenStores = [];
+
+  setStatus("Alterando a senha e recriptografando os dados…", "busy");
+  try {
+    for (const [storageKey, storeName] of Object.entries(stores)) {
+      writtenStores.push([storageKey, storeName]);
+      await writeEncryptedStore(uid, storeName, payload[storageKey], newKey);
+    }
+    await setDoc(securityDocument, {
+      cryptoVersion: 1,
+      salt: bytesToBase64(salt),
+      verifier,
+      initialized: true,
+      passwordChangedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    activeKey = newKey;
+    lastWriteError = false;
+    setStatus("Senha alterada; dados criptografados e sincronizados", "ok");
+    return true;
+  } catch (error) {
+    let rollbackFailed = false;
+    for (const [storageKey, storeName] of writtenStores.reverse()) {
+      try {
+        await writeEncryptedStore(uid, storeName, payload[storageKey], oldKey);
+      } catch (rollbackError) {
+        rollbackFailed = true;
+        console.error("Falha ao reverter a criptografia de " + storeName + ":", rollbackError);
+      }
+    }
+    if (rollbackFailed) {
+      setStatus("Atenção: a troca foi interrompida. Não saia do CRM; mantenha esta sessão aberta e procure suporte.", "error");
+      throw fail("PASSWORD_CHANGE_RECOVERY_REQUIRED", "A troca foi interrompida e a reversão não foi concluída por completo. Não saia nem atualize a página. Mantenha esta sessão aberta e procure suporte.");
+    }
+    setStatus("A troca de senha falhou; os dados foram mantidos com a senha antiga.", "error");
+    throw fail("PASSWORD_CHANGE_FAILED", "Não foi possível concluir a troca. Os dados foram revertidos para a senha antiga. Verifique a conexão e tente novamente.");
+  }
+}
 
 const BACKUP_FORMAT = "lr-interiores-encrypted-backup";
 const BACKUP_VERSION = 1;
