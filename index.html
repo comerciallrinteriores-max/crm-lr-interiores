@@ -223,14 +223,14 @@
 
           <div class="quote-cost-heading">
             <h3>Composição dos custos</h3>
-            <p>Informe o custo total de cada categoria, não o preço cobrado do cliente.</p>
+            <p>A mão de obra é calculada automaticamente como 30% do preço de venda.</p>
           </div>
           <div class="form-grid quote-cost-grid">
             <label>Custo dos materiais (R$) *
               <input id="quoteMaterials" type="number" min="0" step="0.01" value="0" required>
             </label>
-            <label>Custo da mão de obra (R$) *
-              <input id="quoteLabor" type="number" min="0" step="0.01" value="0" required>
+            <label>Custo da mão de obra (30% da venda)
+              <input id="quoteLabor" type="number" min="0" step="0.01" value="0" readonly aria-readonly="true">
             </label>
             <label>Custos adicionais (R$)
               <input id="quoteExtra" type="number" min="0" step="0.01" value="0">

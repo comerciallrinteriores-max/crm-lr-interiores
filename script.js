@@ -48,7 +48,17 @@ function loadQuotes() {
     if (!Array.isArray(parsed)) return [];
     return parsed.filter((quote) =>
       quote && typeof quote.id === "string" && typeof quote.name === "string"
-    );
+    ).map((quote) => {
+      // A mão de obra é sempre 30% do preço de venda.
+      const price = Math.max(0, Number(quote.price) || 0);
+      const materials = Math.max(0, Number(quote.materials) || 0);
+      const labor = Math.round(price * 0.30 * 100) / 100;
+      const extra = Math.max(0, Number(quote.extra) || 0);
+      const totalCost = materials + labor + extra;
+      const profit = price - totalCost;
+      const margin = price > 0 ? (profit / price) * 100 : 0;
+      return { ...quote, labor, totalCost, profit, margin };
+    });
   } catch (error) {
     console.error("Não foi possível carregar os orçamentos:", error);
     return [];
@@ -339,9 +349,11 @@ function formatBRL(value) {
 
 function getQuoteValues() {
   const materials = Math.max(0, Number($("#quoteMaterials").value) || 0);
-  const labor = Math.max(0, Number($("#quoteLabor").value) || 0);
   const extra = Math.max(0, Number($("#quoteExtra").value) || 0);
   const price = Math.max(0, Number($("#quotePrice").value) || 0);
+  // Calcula automaticamente 30% do preço de venda, arredondado em centavos.
+  const labor = Math.round(price * 0.30 * 100) / 100;
+  $("#quoteLabor").value = labor.toFixed(2);
   const totalCost = materials + labor + extra;
   const profit = price - totalCost;
   const margin = price > 0 ? (profit / price) * 100 : 0;
