@@ -329,7 +329,9 @@ export async function changeEncryptionPassword(uid, currentPassword, newPassword
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const newKey = await deriveKey(newPassword, salt);
   const verifier = await encryptText(newKey, "LR-INTERIORES-CRM-ENCRYPTION-KEY-CHECK-v1");
+  const newSaltBase64 = bytesToBase64(salt);
   const writtenStores = [];
+  let metadataUpdateAttempted = false;
 
   setStatus("Alterando a senha e recriptografando os dados…", "busy");
   try {
@@ -337,9 +339,10 @@ export async function changeEncryptionPassword(uid, currentPassword, newPassword
       writtenStores.push([storageKey, storeName]);
       await writeEncryptedStore(uid, storeName, payload[storageKey], newKey);
     }
+    metadataUpdateAttempted = true;
     await setDoc(securityDocument, {
       cryptoVersion: 1,
-      salt: bytesToBase64(salt),
+      salt: newSaltBase64,
       verifier,
       initialized: true,
       passwordChangedAt: serverTimestamp(),
@@ -350,6 +353,44 @@ export async function changeEncryptionPassword(uid, currentPassword, newPassword
     setStatus("Senha alterada; dados criptografados e sincronizados", "ok");
     return true;
   } catch (error) {
+    // If the metadata write returned a network error, first check what Firestore actually stored.
+    // Never roll records back blindly when the server may already have committed the new password.
+    if (metadataUpdateAttempted) {
+      try {
+        const currentSnapshot = await getDoc(securityDocument);
+        const current = currentSnapshot.exists() ? currentSnapshot.data() : null;
+        const isNewConfig = current &&
+          current.cryptoVersion === 1 &&
+          current.salt === newSaltBase64 &&
+          current.verifier?.iv === verifier.iv &&
+          current.verifier?.data === verifier.data;
+        if (isNewConfig) {
+          activeKey = newKey;
+          lastWriteError = false;
+          setStatus("Nova senha confirmada no Firebase; dados sincronizados", "ok");
+          return true;
+        }
+
+        const isOldConfig = current &&
+          current.cryptoVersion === 1 &&
+          current.salt === security.salt &&
+          current.verifier?.iv === security.verifier?.iv &&
+          current.verifier?.data === security.verifier?.data;
+        if (!isOldConfig) {
+          activeKey = null;
+          lastWriteError = true;
+          setStatus("Estado da senha incerto. Não saia nem atualize o CRM; procure suporte.", "error");
+          throw fail("PASSWORD_CHANGE_RECOVERY_REQUIRED", "Não foi possível confirmar qual configuração de senha está ativa. Não saia nem atualize a página e não faça novas alterações; mantenha esta sessão aberta e procure suporte.");
+        }
+      } catch (verificationError) {
+        if (verificationError?.code === "PASSWORD_CHANGE_RECOVERY_REQUIRED") throw verificationError;
+        activeKey = null;
+        lastWriteError = true;
+        setStatus("Não foi possível verificar a senha no Firebase. Não saia nem atualize o CRM.", "error");
+        throw fail("PASSWORD_CHANGE_RECOVERY_REQUIRED", "A conexão impediu confirmar qual senha está ativa. Não saia nem atualize a página e não faça novas alterações; mantenha esta sessão aberta e procure suporte.");
+      }
+    }
+
     let rollbackFailed = false;
     for (const [storageKey, storeName] of writtenStores.reverse()) {
       try {
@@ -360,9 +401,12 @@ export async function changeEncryptionPassword(uid, currentPassword, newPassword
       }
     }
     if (rollbackFailed) {
+      activeKey = null;
+      lastWriteError = true;
       setStatus("Atenção: a troca foi interrompida. Não saia do CRM; mantenha esta sessão aberta e procure suporte.", "error");
       throw fail("PASSWORD_CHANGE_RECOVERY_REQUIRED", "A troca foi interrompida e a reversão não foi concluída por completo. Não saia nem atualize a página. Mantenha esta sessão aberta e procure suporte.");
     }
+    activeKey = oldKey;
     setStatus("A troca de senha falhou; os dados foram mantidos com a senha antiga.", "error");
     throw fail("PASSWORD_CHANGE_FAILED", "Não foi possível concluir a troca. Os dados foram revertidos para a senha antiga. Verifique a conexão e tente novamente.");
   }
