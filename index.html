@@ -11,10 +11,25 @@
   <link rel="stylesheet" href="producao.css?v=20261015-2">
   <link rel="stylesheet" href="financeiro.css?v=20261015-2">
   <link rel="stylesheet" href="marketing.css?v=20261015-1">
-  <script src="script.js?v=20261015-3" defer></script>
+  <script type="module" src="firebase-auth.js?v=1"></script>
 </head>
 <body>
-  <div class="app">
+  <section id="authScreen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#f3f6f4;font-family:Arial,sans-serif;">
+    <form id="loginForm" style="width:100%;max-width:420px;background:#fff;padding:32px;border-radius:18px;box-shadow:0 12px 36px rgba(23,61,50,.12);">
+      <div style="font-size:13px;letter-spacing:2px;color:#527064;font-weight:700;margin-bottom:10px;">LR INTERIORES</div>
+      <h1 style="margin:0 0 8px;color:#173d32;font-size:26px;">Acesse seu CRM</h1>
+      <p style="margin:0 0 24px;color:#61716a;line-height:1.5;">Entre com o e-mail e a senha cadastrados no Firebase.</p>
+      <label for="loginEmail" style="display:block;font-size:14px;font-weight:600;margin:0 0 7px;color:#263b33;">E-mail</label>
+      <input id="loginEmail" type="email" autocomplete="username" required style="box-sizing:border-box;width:100%;padding:12px;border:1px solid #cbd7d0;border-radius:9px;margin-bottom:16px;font-size:16px;">
+      <label for="loginPassword" style="display:block;font-size:14px;font-weight:600;margin:0 0 7px;color:#263b33;">Senha</label>
+      <input id="loginPassword" type="password" autocomplete="current-password" required style="box-sizing:border-box;width:100%;padding:12px;border:1px solid #cbd7d0;border-radius:9px;margin-bottom:18px;font-size:16px;">
+      <button id="loginButton" type="submit" style="width:100%;border:0;border-radius:9px;padding:13px;background:#173d32;color:#fff;font-weight:700;font-size:15px;cursor:pointer;">Entrar</button>
+      <p id="loginMessage" role="status" aria-live="polite" style="min-height:20px;color:#a33131;font-size:14px;line-height:1.45;margin:14px 0 0;"></p>
+      <p style="margin:12px 0 0;color:#718078;font-size:12px;line-height:1.5;">Seus dados locais não serão apagados por esta etapa.</p>
+    </form>
+  </section>
+  <div id="appLoading" hidden style="padding:32px;text-align:center;color:#173d32;font-family:Arial,sans-serif;">Carregando seu CRM…</div>
+  <div class="app" id="crmApp" hidden>
     <aside class="sidebar" id="sidebar">
       <div class="brand">
         <div class="brand-mark">LR</div>
@@ -46,7 +61,7 @@
           <span class="eyebrow">GESTÃO DO NEGÓCIO</span>
           <h1 id="pageTitle">Painel inicial</h1>
         </div>
-        <div class="topbar-tag">LR <span>Interiores</span></div>
+        <div style="display:flex;align-items:center;gap:12px;"><button id="logoutButton" type="button" class="button button-outline">Sair</button><div class="topbar-tag">LR <span>Interiores</span></div></div>
       </header>
 
       <section class="page active" id="page-dashboard">
