@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
-import { getEncryptionState, initializeCloudData, lockCloudData } from "./firebase-data.js?v=2";
+import { getEncryptionState, initializeCloudData, lockCloudData, createEncryptedBackup, restoreEncryptedBackup } from "./firebase-data.js?v=3";
 import {
   getAuth, setPersistence, browserLocalPersistence, signInWithEmailAndPassword,
   onAuthStateChanged, signOut
@@ -34,6 +34,13 @@ const encryptionConfirm = document.getElementById("encryptionConfirm");
 const encryptionButton = document.getElementById("encryptionButton");
 const encryptionMessage = document.getElementById("encryptionMessage");
 const logoutButton = document.getElementById("logoutButton");
+const backupPassword = document.getElementById("backupPassword");
+const backupPasswordConfirm = document.getElementById("backupPasswordConfirm");
+const createBackupButton = document.getElementById("createBackupButton");
+const restoreBackupButton = document.getElementById("restoreBackupButton");
+const backupFileInput = document.getElementById("backupFileInput");
+const backupRestorePassword = document.getElementById("backupRestorePassword");
+const backupStatus = document.getElementById("backupStatus");
 
 let crmLoaded = false;
 let loadedUid = null;
@@ -162,6 +169,108 @@ encryptionForm.addEventListener("submit", async (event) => {
   const password = encryptionPassword.value;
   const confirmation = encryptionConfirm.value;
   await loadCRMWithEncryption(auth.currentUser, password, confirmation);
+});
+
+
+function setBackupStatus(message, isError = false) {
+  if (!backupStatus) return;
+  backupStatus.textContent = message;
+  backupStatus.style.color = isError ? "#a33131" : "#527064";
+}
+
+createBackupButton?.addEventListener("click", async () => {
+  const password = backupPassword?.value || "";
+  if (password.length < 10) {
+    setBackupStatus("Use uma senha de backup com pelo menos 10 caracteres.", true);
+    backupPassword?.focus();
+    return;
+  }
+  if (password !== (backupPasswordConfirm?.value || "")) {
+    setBackupStatus("As senhas de backup não coincidem.", true);
+    backupPasswordConfirm?.focus();
+    return;
+  }
+  createBackupButton.disabled = true;
+  createBackupButton.textContent = "Preparando backup…";
+  setBackupStatus("Conferindo sincronização e criptografando o arquivo…");
+  try {
+    const contents = await createEncryptedBackup(password);
+    const blob = new Blob([contents], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "lr-interiores-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    backupPassword.value = "";
+    backupPasswordConfirm.value = "";
+    setBackupStatus("Backup criptografado criado. Guarde o arquivo e a senha em locais seguros.");
+  } catch (error) {
+    console.error("Falha ao criar backup:", error.code || error.message);
+    setBackupStatus(error.message || "Não foi possível criar o backup.", true);
+  } finally {
+    createBackupButton.disabled = false;
+    createBackupButton.textContent = "Baixar backup criptografado";
+  }
+});
+
+restoreBackupButton?.addEventListener("click", () => {
+  if (!backupFileInput) return;
+  backupFileInput.click();
+});
+
+backupFileInput?.addEventListener("change", async () => {
+  const file = backupFileInput.files?.[0];
+  if (!file) return;
+  if (file.size > 50 * 1024 * 1024) {
+    setBackupStatus("O arquivo ultrapassa o limite de 50 MB.", true);
+    backupFileInput.value = "";
+    return;
+  }
+  const password = backupRestorePassword?.value || "";
+  if (password.length < 10) {
+    setBackupStatus("Informe a senha usada para proteger este backup (mínimo de 10 caracteres).", true);
+    backupRestorePassword?.focus();
+    backupFileInput.value = "";
+    return;
+  }
+  const confirmed = window.confirm("Atenção: restaurar o backup substituirá os dados atuais do CRM nas cinco áreas (clientes, orçamentos, vendas, produção e financeiro). Faça isso somente se deseja substituir os dados atuais. Deseja continuar?");
+  if (!confirmed) {
+    backupFileInput.value = "";
+    return;
+  }
+  restoreBackupButton.disabled = true;
+  createBackupButton.disabled = true;
+  setBackupStatus("Validando o backup e restaurando os dados…");
+  try {
+    const contents = await file.text();
+    const result = await restoreEncryptedBackup(contents, password, auth.currentUser?.uid);
+    backupRestorePassword.value = "";
+    setBackupStatus("Backup restaurado. Clientes: " + result.counts["lr-interiores-crm-v1"] +
+      "; orçamentos: " + result.counts["lr-interiores-orcamentos-v1"] +
+      "; vendas: " + result.counts["lr-interiores-funil-v1"] +
+      "; produção: " + result.counts["lr-interiores-producao-v1"] +
+      "; financeiro: " + result.counts["lr-interiores-financeiro-v1"] + ".");
+    backupFileInput.value = "";
+    window.setTimeout(() => window.location.reload(), 1200);
+  } catch (error) {
+    console.error("Falha ao restaurar backup:", error.code || error.message);
+    const messages = {
+      "WRONG_BACKUP_PASSWORD": "Senha de backup incorreta ou arquivo danificado. Os dados atuais não foram substituídos.",
+      "INVALID_BACKUP_FILE": error.message,
+      "INVALID_BACKUP_FORMAT": error.message,
+      "INVALID_BACKUP_CONTENT": error.message,
+      "WEAK_BACKUP_PASSWORD": error.message,
+      "CRM_LOCKED": "Desbloqueie o CRM antes de restaurar.",
+      "SYNC_PENDING": error.message
+    };
+    setBackupStatus(messages[error.code] || error.message || "Não foi possível restaurar o backup.", true);
+  } finally {
+    restoreBackupButton.disabled = false;
+    createBackupButton.disabled = false;
+  }
 });
 
 logoutButton.addEventListener("click", async () => {
