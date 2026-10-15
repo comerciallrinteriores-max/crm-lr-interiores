@@ -1851,7 +1851,6 @@ function openFinanceForm(entry = null) {
   $("#financePaidAmountField").hidden = !linkedSale;
   $("#financeStatusField").hidden = linkedSale;
   $("#financePaidDateField").hidden = false;
-  if (linkedSale) $("#financePaidDateField").querySelector("label");
   $("#financePaidAmount").max = entry ? String(entry.amount) : "";
   const linkedInfo = $("#financeLinkedSaleInfo");
   linkedInfo.hidden = !linkedSale;
@@ -2118,7 +2117,11 @@ $("#financeList").addEventListener("click", (event) => {
       ...item,
       status: "paid",
       paidAmount: item.saleId ? item.amount : item.paidAmount,
-      payments: item.saleId ? [{ amount: item.amount, date: localISODate() }] : (item.payments || []),
+      payments: item.saleId
+        ? [...(item.payments || []), ...(item.amount > Number(item.paidAmount || 0)
+          ? [{ amount: Math.round((item.amount - Number(item.paidAmount || 0)) * 100) / 100, date: localISODate() }]
+          : [])]
+        : (item.payments || []),
       paidDate: localISODate(),
       updatedAt: new Date().toISOString()
     };
