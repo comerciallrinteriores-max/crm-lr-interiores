@@ -1466,7 +1466,115 @@ function renderProduction(searchTerm = $("#productionSearch").value) {
       </article>
     `;
   }).join("");
+  renderProductionCalendar(filtered);
 }
+
+let productionCalendarDate = new Date();
+let productionViewMode = "list";
+
+function localDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function renderProductionCalendar(orders = productionOrders) {
+  const year = productionCalendarDate.getFullYear();
+  const month = productionCalendarDate.getMonth();
+  const monthName = productionCalendarDate.toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric"
+  });
+  $("#productionCalendarMonth").textContent = monthName.charAt(0).toLocaleUpperCase("pt-BR") + monthName.slice(1);
+
+  const firstDay = new Date(year, month, 1);
+  const gridStart = new Date(year, month, 1 - firstDay.getDay());
+  const todayKey = localDateKey(new Date());
+  const eventsByDate = {};
+
+  orders.forEach((order) => {
+    const client = clients.find((item) => item.id === order.clientId);
+    const clientName = client?.name || order.clientName || "Sem cliente";
+    const addEvent = (date, type, label, cssClass) => {
+      if (!date) return;
+      if (!eventsByDate[date]) eventsByDate[date] = [];
+      eventsByDate[date].push({
+        orderId: order.id,
+        title: order.title,
+        clientName,
+        type,
+        label,
+        cssClass,
+        overdue: type === "deadline" && date < todayKey && order.status !== "delivered"
+      });
+    };
+    addEvent(order.startDate, "start", "Início", "calendar-event-start");
+    addEvent(order.deadline, "deadline", "Entrega", "calendar-event-deadline");
+    addEvent(order.deliveredDate, "delivered", "Entregue", "calendar-event-delivered");
+  });
+
+  const weekdayHeaders = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  const weekdayMarkup = weekdayHeaders.map((day) => `<div class="production-calendar-weekday">${day}</div>`).join("");
+  const dayCells = [];
+  for (let i = 0; i < 42; i += 1) {
+    const dayDate = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
+    const dateKey = localDateKey(dayDate);
+    const dayEvents = (eventsByDate[dateKey] || []).sort((a, b) => {
+      const priority = { deadline: 0, start: 1, delivered: 2 };
+      return priority[a.type] - priority[b.type];
+    });
+    const visibleEvents = dayEvents.slice(0, 3);
+    const moreCount = dayEvents.length - visibleEvents.length;
+    dayCells.push(`
+      <div class="production-calendar-day ${dayDate.getMonth() !== month ? "is-outside-month" : ""} ${dateKey === todayKey ? "is-today" : ""}" data-calendar-date="${dateKey}">
+        <span class="production-calendar-day-number">${dayDate.getDate()}</span>
+        <div class="production-calendar-events">
+          ${visibleEvents.map((event) => `
+            <button type="button" class="production-calendar-event ${event.cssClass} ${event.overdue ? "is-overdue" : ""}" data-production-edit="${escapeHTML(event.orderId)}" title="${escapeHTML(event.label + ": " + event.title + " — " + event.clientName)}">
+              <span>${escapeHTML(event.label)}:</span> ${escapeHTML(event.title)}
+            </button>
+          `).join("")}
+          ${moreCount > 0 ? `<span class="production-calendar-more">+${moreCount} evento(s)</span>` : ""}
+        </div>
+      </div>
+    `);
+  }
+  $("#productionCalendarGrid").innerHTML = weekdayMarkup + dayCells.join("");
+}
+
+function setProductionView(mode) {
+  productionViewMode = mode;
+  const calendarMode = mode === "calendar";
+  $("#productionList").hidden = calendarMode;
+  $("#productionCalendar").hidden = !calendarMode;
+  $("#productionListViewBtn").classList.toggle("active", !calendarMode);
+  $("#productionCalendarViewBtn").classList.toggle("active", calendarMode);
+  $("#productionListViewBtn").setAttribute("aria-pressed", String(!calendarMode));
+  $("#productionCalendarViewBtn").setAttribute("aria-pressed", String(calendarMode));
+  if (calendarMode) renderProductionCalendar();
+}
+
+$("#productionListViewBtn").addEventListener("click", () => setProductionView("list"));
+$("#productionCalendarViewBtn").addEventListener("click", () => setProductionView("calendar"));
+$("#productionCalendarPrev").addEventListener("click", () => {
+  productionCalendarDate = new Date(productionCalendarDate.getFullYear(), productionCalendarDate.getMonth() - 1, 1);
+  renderProductionCalendar();
+});
+$("#productionCalendarNext").addEventListener("click", () => {
+  productionCalendarDate = new Date(productionCalendarDate.getFullYear(), productionCalendarDate.getMonth() + 1, 1);
+  renderProductionCalendar();
+});
+$("#productionCalendarToday").addEventListener("click", () => {
+  productionCalendarDate = new Date();
+  renderProductionCalendar();
+});
+$("#productionCalendarGrid").addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-production-edit]");
+  if (!editButton) return;
+  const order = productionOrders.find((item) => item.id === editButton.dataset.productionEdit);
+  if (order) openProductionForm(order);
+});
 
 function updateProductionStatus(orderId, status) {
   if (!productionStatuses.some((item) => item.id === status)) return;
