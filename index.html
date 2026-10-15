@@ -7,6 +7,7 @@
   <title>CRM | LR Interiores</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="orcamentos.css">
+  <link rel="stylesheet" href="vendas.css">
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -290,7 +291,91 @@
       </section>
 
       <section class="page" id="page-vendas">
-        <div class="placeholder-card"><span>↗</span><h2>Funil de vendas</h2><p>Vamos acompanhar cada oportunidade, desde o primeiro contato até a venda concluída.</p></div>
+        <div class="section-heading sales-heading">
+          <div>
+            <h2>Oportunidades comerciais</h2>
+            <p>Acompanhe cada oportunidade do primeiro contato ao fechamento.</p>
+          </div>
+          <button class="button button-primary" id="newSaleBtn">+ Nova oportunidade</button>
+        </div>
+
+        <div class="sales-summary-grid">
+          <article class="sales-summary-card">
+            <span>Oportunidades abertas</span>
+            <strong id="salesOpenCount">0</strong>
+          </article>
+          <article class="sales-summary-card">
+            <span>Valor previsto em aberto</span>
+            <strong id="salesOpenValue">R$ 0,00</strong>
+          </article>
+          <article class="sales-summary-card">
+            <span>Vendas concluídas</span>
+            <strong id="salesWonCount">0</strong>
+          </article>
+        </div>
+
+        <form id="saleForm" class="content-card sales-form" hidden>
+          <div class="form-heading">
+            <div>
+              <h2 id="saleFormTitle">Nova oportunidade</h2>
+              <p>Registre os dados comerciais e o próximo passo.</p>
+            </div>
+            <button type="button" class="button button-outline" id="cancelSaleBtn">Cancelar</button>
+          </div>
+          <input type="hidden" id="saleId">
+          <div class="form-grid">
+            <label>Nome da oportunidade / projeto *
+              <input id="saleTitle" required maxlength="150" placeholder="Ex.: Projeto de expositor para loja">
+            </label>
+            <label>Etapa do funil
+              <select id="saleStage">
+                <option value="lead">Novo contato</option>
+                <option value="contact">Contato realizado</option>
+                <option value="proposal">Proposta enviada</option>
+                <option value="negotiation">Em negociação</option>
+                <option value="won">Venda concluída</option>
+                <option value="lost">Perdida / cancelada</option>
+              </select>
+            </label>
+            <label>Cliente vinculado
+              <select id="saleClient">
+                <option value="">Sem cliente vinculado</option>
+              </select>
+            </label>
+            <label>Orçamento relacionado
+              <select id="saleQuote">
+                <option value="">Sem orçamento vinculado</option>
+              </select>
+            </label>
+            <label>Próxima ação
+              <input id="saleNextAction" maxlength="180" placeholder="Ex.: Ligar para confirmar medidas">
+            </label>
+            <label>Data do próximo contato
+              <input id="saleFollowupDate" type="date">
+            </label>
+            <label>Valor previsto da venda (R$)
+              <input id="saleExpectedValue" type="number" min="0" step="0.01" placeholder="0,00">
+            </label>
+            <label class="full-width">Observações
+              <textarea id="saleNotes" rows="3" maxlength="2000" placeholder="Detalhes importantes sobre a oportunidade"></textarea>
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="button button-outline" id="cancelSaleBtnBottom">Cancelar</button>
+            <button type="submit" class="button button-primary">Salvar oportunidade</button>
+          </div>
+        </form>
+
+        <div class="content-card sales-board-card">
+          <div class="list-toolbar sales-toolbar">
+            <div>
+              <h2>Quadro de vendas</h2>
+              <p id="salesBoardCount">0 oportunidades</p>
+            </div>
+            <input id="salesSearch" class="search-input" placeholder="Buscar oportunidade ou cliente..." aria-label="Buscar oportunidades de venda">
+          </div>
+          <div id="salesBoard" class="sales-board" aria-label="Quadro Kanban de vendas"></div>
+        </div>
       </section>
       <section class="page" id="page-producao">
         <div class="placeholder-card"><span>⚒</span><h2>Produção e entregas</h2><p>Na próxima etapa, organizaremos o andamento dos projetos e as datas de entrega.</p></div>
