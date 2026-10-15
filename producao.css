@@ -320,3 +320,53 @@
   .production-calendar-day { min-height: 94px; padding: 5px 3px; }
   .production-calendar-event { padding: 4px 3px; font-size: 8px; }
 }
+
+
+/* Foto de referência dos projetos */
+.production-photo-help {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.production-photo-preview-wrap {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.production-photo-preview-wrap[hidden] { display: none; }
+.production-photo-preview {
+  display: block;
+  width: min(100%, 360px);
+  max-height: 260px;
+  object-fit: contain;
+  object-position: left center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f7f8f6;
+}
+.production-order-photo-link {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 12px;
+}
+.production-order-photo {
+  display: block;
+  width: min(100%, 340px);
+  max-height: 240px;
+  object-fit: contain;
+  object-position: left center;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #f7f8f6;
+}
+.production-order-photo-link:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+@media (max-width: 760px) {
+  .production-order-photo { width: 100%; max-height: 260px; }
+}
