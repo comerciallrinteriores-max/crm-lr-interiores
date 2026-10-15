@@ -141,6 +141,7 @@ function navigateTo(pageName) {
   if (pageName === "dashboard") renderDashboard();
   if (pageName === "orcamentos") renderQuotes();
   if (pageName === "vendas") renderSales();
+  if (pageName === "producao") renderProduction();
 }
 
 $$(".nav-item").forEach((button) => {
@@ -1186,9 +1187,343 @@ $("#salesBoard").addEventListener("change", (event) => {
   if (select) moveSaleToStage(select.dataset.saleStage, select.value);
 });
 
+/* ---------- Produção e entregas ---------- */
+const PRODUCTION_STORAGE_KEY = "lr-interiores-producao-v1";
+
+const productionStatuses = [
+  { id: "pending", title: "Aguardando início" },
+  { id: "production", title: "Em produção" },
+  { id: "finishing", title: "Acabamento / revisão" },
+  { id: "ready", title: "Pronto para entrega" },
+  { id: "delivered", title: "Entregue ao cliente" },
+  { id: "paused", title: "Pausado" }
+];
+
+let productionOrders = loadProductionOrders();
+
+function loadProductionOrders() {
+  try {
+    const saved = localStorage.getItem(PRODUCTION_STORAGE_KEY);
+    const parsed = saved ? JSON.parse(saved) : [];
+    if (!Array.isArray(parsed)) return [];
+
+    const validStatuses = productionStatuses.map((status) => status.id);
+    return parsed.filter((order) =>
+      order &&
+      typeof order.id === "string" &&
+      typeof order.title === "string"
+    ).map((order) => ({
+      ...order,
+      status: validStatuses.includes(order.status) ? order.status : "pending",
+      saleId: typeof order.saleId === "string" ? order.saleId : "",
+      clientId: typeof order.clientId === "string" ? order.clientId : "",
+      quoteId: typeof order.quoteId === "string" ? order.quoteId : "",
+      startDate: typeof order.startDate === "string" ? order.startDate : "",
+      deadline: typeof order.deadline === "string" ? order.deadline : "",
+      deliveredDate: typeof order.deliveredDate === "string" ? order.deliveredDate : "",
+      notes: typeof order.notes === "string" ? order.notes : ""
+    }));
+  } catch (error) {
+    console.error("Não foi possível carregar a produção:", error);
+    return [];
+  }
+}
+
+function saveProductionOrders() {
+  try {
+    localStorage.setItem(PRODUCTION_STORAGE_KEY, JSON.stringify(productionOrders));
+    return true;
+  } catch (error) {
+    console.error("Não foi possível salvar a produção:", error);
+    alert("Não foi possível salvar os projetos neste navegador. Verifique o espaço disponível ou as configurações de privacidade.");
+    return false;
+  }
+}
+
+function renderProductionOptions(selectedSaleId = $("#productionSale").value, selectedClientId = $("#productionClient").value, selectedQuoteId = $("#productionQuote").value) {
+  const saleSelect = $("#productionSale");
+  const clientSelect = $("#productionClient");
+  const quoteSelect = $("#productionQuote");
+
+  const wonSales = sales.filter((sale) => sale.stage === "won");
+  saleSelect.innerHTML = '<option value="">Sem venda vinculada</option>' +
+    wonSales.map((sale) => {
+      const client = clients.find((item) => item.id === sale.clientId);
+      const clientName = client?.name || sale.clientName || "Sem cliente";
+      return `<option value="${escapeHTML(sale.id)}">${escapeHTML(sale.title)} — ${escapeHTML(clientName)}</option>`;
+    }).join("");
+  saleSelect.value = wonSales.some((sale) => sale.id === selectedSaleId) ? selectedSaleId : "";
+
+  clientSelect.innerHTML = '<option value="">Sem cliente vinculado</option>' +
+    clients.map((client) => `<option value="${escapeHTML(client.id)}">${escapeHTML(client.name)}</option>`).join("");
+  clientSelect.value = clients.some((client) => client.id === selectedClientId) ? selectedClientId : "";
+
+  const availableQuotes = quotes.filter((quote) =>
+    !clientSelect.value || !quote.clientId || quote.clientId === clientSelect.value
+  );
+  quoteSelect.innerHTML = '<option value="">Sem orçamento vinculado</option>' +
+    availableQuotes.map((quote) => {
+      const clientLabel = quote.clientName ? ` — ${quote.clientName}` : "";
+      return `<option value="${escapeHTML(quote.id)}">${escapeHTML(quote.name)}${escapeHTML(clientLabel)} · ${formatBRL(quote.price)}</option>`;
+    }).join("");
+  quoteSelect.value = availableQuotes.some((quote) => quote.id === selectedQuoteId) ? selectedQuoteId : "";
+}
+
+function openProductionForm(order = null) {
+  const form = $("#productionForm");
+  form.reset();
+  $("#productionId").value = "";
+  $("#productionStatus").value = "pending";
+  $("#productionFormTitle").textContent = order ? "Editar ordem de produção" : "Nova ordem de produção";
+  renderProductionOptions("", "", "");
+
+  if (order) {
+    $("#productionId").value = order.id;
+    $("#productionTitle").value = order.title || "";
+    $("#productionStatus").value = order.status || "pending";
+    renderProductionOptions(order.saleId || "", order.clientId || "", order.quoteId || "");
+    $("#productionStartDate").value = order.startDate || "";
+    $("#productionDeadline").value = order.deadline || "";
+    $("#productionDeliveredDate").value = order.deliveredDate || "";
+    $("#productionNotes").value = order.notes || "";
+  }
+
+  form.hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#productionTitle").focus({ preventScroll: true });
+}
+
+function closeProductionForm() {
+  $("#productionForm").hidden = true;
+  $("#productionForm").reset();
+  $("#productionId").value = "";
+}
+
+$("#newProductionBtn").addEventListener("click", () => openProductionForm());
+$("#cancelProductionBtn").addEventListener("click", closeProductionForm);
+$("#cancelProductionBtnBottom").addEventListener("click", closeProductionForm);
+
+$("#productionSale").addEventListener("change", () => {
+  const sale = sales.find((item) => item.id === $("#productionSale").value);
+  if (!sale) return;
+
+  const linkedQuote = quotes.find((quote) => quote.id === sale.quoteId);
+  const clientId = sale.clientId || "";
+  const quoteId = linkedQuote ? linkedQuote.id : "";
+  renderProductionOptions(sale.id, clientId, quoteId);
+  if (!$("#productionTitle").value.trim()) {
+    $("#productionTitle").value = sale.title || sale.quoteName || "";
+  }
+});
+
+$("#productionClient").addEventListener("change", () => {
+  renderProductionOptions($("#productionSale").value, $("#productionClient").value, $("#productionQuote").value);
+});
+
+$("#productionQuote").addEventListener("change", () => {
+  const quote = quotes.find((item) => item.id === $("#productionQuote").value);
+  if (!quote) return;
+  if (quote.clientId) {
+    $("#productionClient").value = quote.clientId;
+    renderProductionOptions($("#productionSale").value, quote.clientId, quote.id);
+  }
+  if (!$("#productionTitle").value.trim()) $("#productionTitle").value = quote.name || "";
+});
+
+$("#productionForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const id = $("#productionId").value;
+  const title = $("#productionTitle").value.trim();
+  if (!title) {
+    alert("Informe o nome do projeto.");
+    return;
+  }
+
+  const existing = productionOrders.find((order) => order.id === id);
+  const saleId = $("#productionSale").value;
+  const clientId = $("#productionClient").value;
+  const quoteId = $("#productionQuote").value;
+  const sale = sales.find((item) => item.id === saleId);
+  const client = clients.find((item) => item.id === clientId);
+  const quote = quotes.find((item) => item.id === quoteId);
+  const status = $("#productionStatus").value;
+  const deliveredDate = $("#productionDeliveredDate").value ||
+    (status === "delivered" ? new Date().toISOString().slice(0, 10) : "");
+
+  const orderData = {
+    id: id || createId(),
+    title,
+    status,
+    saleId,
+    saleTitle: sale ? sale.title : "",
+    clientId,
+    clientName: client ? client.name : "",
+    quoteId,
+    quoteName: quote ? quote.name : "",
+    startDate: $("#productionStartDate").value,
+    deadline: $("#productionDeadline").value,
+    deliveredDate,
+    notes: $("#productionNotes").value.trim(),
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  const previousOrders = [...productionOrders];
+  if (id) {
+    productionOrders = productionOrders.map((order) => order.id === id ? orderData : order);
+  } else {
+    productionOrders.unshift(orderData);
+  }
+
+  if (!saveProductionOrders()) {
+    productionOrders = previousOrders;
+    return;
+  }
+
+  closeProductionForm();
+  renderProduction();
+});
+
+function formatProductionDate(value) {
+  if (!value) return "";
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("pt-BR");
+}
+
+function renderProduction(searchTerm = $("#productionSearch").value) {
+  renderProductionOptions();
+  const normalizedSearch = (searchTerm || "").trim().toLocaleLowerCase("pt-BR");
+  const filtered = productionOrders.filter((order) => {
+    const client = clients.find((item) => item.id === order.clientId);
+    const clientName = client?.name || order.clientName || "";
+    return `${order.title} ${clientName} ${order.saleTitle} ${order.quoteName} ${order.notes}`
+      .toLocaleLowerCase("pt-BR").includes(normalizedSearch);
+  });
+
+  const activeOrders = productionOrders.filter((order) => !["delivered"].includes(order.status));
+  $("#productionActiveCount").textContent = activeOrders.length;
+  $("#productionWorkingCount").textContent = productionOrders.filter((order) =>
+    ["production", "finishing"].includes(order.status)
+  ).length;
+  $("#productionReadyCount").textContent = productionOrders.filter((order) => order.status === "ready").length;
+  $("#productionListCount").textContent = `${filtered.length} ${filtered.length === 1 ? "projeto" : "projetos"}`;
+
+  const list = $("#productionList");
+  if (!filtered.length) {
+    list.innerHTML = `<div class="list-empty">${productionOrders.length === 0
+      ? "Você ainda não cadastrou projetos de produção. Clique em “+ Nova ordem” para começar."
+      : "Nenhum projeto encontrado para essa busca."}</div>`;
+    return;
+  }
+
+  const statusClasses = {
+    pending: "production-status-pending",
+    production: "production-status-working",
+    finishing: "production-status-finishing",
+    ready: "production-status-ready",
+    delivered: "production-status-delivered",
+    paused: "production-status-paused"
+  };
+
+  list.innerHTML = filtered.map((order) => {
+    const statusInfo = productionStatuses.find((item) => item.id === order.status) || productionStatuses[0];
+    const client = clients.find((item) => item.id === order.clientId);
+    const clientName = client?.name || order.clientName || "Sem cliente vinculado";
+    const isOverdue = order.deadline && order.deadline < new Date().toISOString().slice(0, 10) && order.status !== "delivered";
+    const statusOptions = productionStatuses.map((status) =>
+      `<option value="${status.id}" ${status.id === order.status ? "selected" : ""}>${escapeHTML(status.title)}</option>`
+    ).join("");
+
+    return `
+      <article class="production-order">
+        <div class="production-order-main">
+          <div class="production-order-top">
+            <div>
+              <span class="production-order-kicker">PROJETO</span>
+              <h3>${escapeHTML(order.title)}</h3>
+            </div>
+            <span class="production-status ${statusClasses[order.status] || ""}">${escapeHTML(statusInfo.title)}</span>
+          </div>
+          <p class="production-client-name">${escapeHTML(clientName)}</p>
+          ${order.saleTitle ? `<p class="production-linked-record">Venda: ${escapeHTML(order.saleTitle)}</p>` : ""}
+          ${order.quoteName ? `<p class="production-linked-record">Orçamento: ${escapeHTML(order.quoteName)}</p>` : ""}
+          <div class="production-dates">
+            ${order.startDate ? `<span><small>Início</small><strong>${escapeHTML(formatProductionDate(order.startDate))}</strong></span>` : ""}
+            ${order.deadline ? `<span class="${isOverdue ? "production-overdue" : ""}"><small>Prazo de entrega</small><strong>${escapeHTML(formatProductionDate(order.deadline))}${isOverdue ? " · Atrasado" : ""}</strong></span>` : ""}
+            ${order.deliveredDate ? `<span><small>Entregue em</small><strong>${escapeHTML(formatProductionDate(order.deliveredDate))}</strong></span>` : ""}
+          </div>
+          ${order.notes ? `<p class="production-notes">${escapeHTML(order.notes)}</p>` : ""}
+        </div>
+        <div class="production-order-actions">
+          <label>Atualizar status
+            <select data-production-status="${escapeHTML(order.id)}" aria-label="Atualizar status de ${escapeHTML(order.title)}">${statusOptions}</select>
+          </label>
+          <button type="button" class="button button-outline" data-production-edit="${escapeHTML(order.id)}">Editar</button>
+          <button type="button" class="button button-outline production-delete" data-production-delete="${escapeHTML(order.id)}">Excluir</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function updateProductionStatus(orderId, status) {
+  if (!productionStatuses.some((item) => item.id === status)) return;
+  const previousOrders = [...productionOrders];
+  productionOrders = productionOrders.map((order) => {
+    if (order.id !== orderId) return order;
+    return {
+      ...order,
+      status,
+      deliveredDate: status === "delivered"
+        ? (order.deliveredDate || new Date().toISOString().slice(0, 10))
+        : order.deliveredDate,
+      updatedAt: new Date().toISOString()
+    };
+  });
+  if (!saveProductionOrders()) {
+    productionOrders = previousOrders;
+    return;
+  }
+  renderProduction();
+}
+
+$("#productionSearch").addEventListener("input", (event) => renderProduction(event.target.value));
+
+$("#productionList").addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-production-edit]");
+  const deleteButton = event.target.closest("[data-production-delete]");
+
+  if (editButton) {
+    const order = productionOrders.find((item) => item.id === editButton.dataset.productionEdit);
+    if (order) openProductionForm(order);
+    return;
+  }
+
+  if (deleteButton) {
+    const order = productionOrders.find((item) => item.id === deleteButton.dataset.productionDelete);
+    if (!order) return;
+    if (!confirm(`Deseja realmente excluir o projeto "${order.title}"?`)) return;
+    const previousOrders = [...productionOrders];
+    productionOrders = productionOrders.filter((item) => item.id !== order.id);
+    if (!saveProductionOrders()) {
+      productionOrders = previousOrders;
+      return;
+    }
+    renderProduction();
+  }
+});
+
+$("#productionList").addEventListener("change", (event) => {
+  const select = event.target.closest("[data-production-status]");
+  if (select) updateProductionStatus(select.dataset.productionStatus, select.value);
+});
+
 /* ---------- Inicialização ---------- */
 renderClients();
 renderDashboard();
 renderQuotes();
 updateQuoteCalculations();
 renderSales();
+renderProduction();
