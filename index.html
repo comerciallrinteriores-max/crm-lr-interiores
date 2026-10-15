@@ -449,6 +449,14 @@
             <label>Data da entrega
               <input id="productionDeliveredDate" type="date">
             </label>
+            <label class="full-width">Foto do projeto (opcional)
+              <input id="productionPhoto" type="file" accept="image/*" aria-describedby="productionPhotoHelp">
+              <small id="productionPhotoHelp" class="production-photo-help">A imagem será otimizada automaticamente (até 250 KB e 1200 px). Evite fotos com informações pessoais desnecessárias.</small>
+            </label>
+            <div id="productionPhotoPreviewWrap" class="production-photo-preview-wrap full-width" hidden>
+              <img id="productionPhotoPreview" class="production-photo-preview" alt="Prévia da foto do projeto">
+              <button type="button" class="button button-outline" id="removeProductionPhotoBtn">Remover foto</button>
+            </div>
             <label class="full-width">Observações
               <textarea id="productionNotes" rows="3" maxlength="2000" placeholder="Materiais, medidas, detalhes de fabricação ou entrega"></textarea>
             </label>
