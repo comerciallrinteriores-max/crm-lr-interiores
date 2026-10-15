@@ -10,7 +10,8 @@
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
   <link rel="stylesheet" href="producao.css?v=20261015-2">
   <link rel="stylesheet" href="financeiro.css?v=20261015-2">
-  <script src="script.js?v=20261015-2" defer></script>
+  <link rel="stylesheet" href="marketing.css?v=20261015-1">
+  <script src="script.js?v=20261015-3" defer></script>
 </head>
 <body>
   <div class="app">
@@ -79,14 +80,14 @@
           <article class="stat-card">
             <span class="stat-icon">↗</span>
             <span class="stat-label">Vendas em andamento</span>
-            <strong>0</strong>
-            <small>Disponível na próxima etapa</small>
+            <strong id="dashboardOpenSales">0</strong>
+            <small>Oportunidades ainda abertas</small>
           </article>
           <article class="stat-card">
             <span class="stat-icon">R$</span>
-            <span class="stat-label">Faturamento registrado</span>
-            <strong>R$ 0,00</strong>
-            <small>Disponível na etapa financeira</small>
+            <span class="stat-label">Recebido neste mês</span>
+            <strong id="dashboardReceivedMonth">R$ 0,00</strong>
+            <small>Valores registrados como recebidos</small>
           </article>
         </div>
         <div class="content-card">
@@ -103,6 +104,28 @@
             <p>Comece adicionando seu primeiro cliente.</p>
             <button class="button button-primary" data-go="clientes">Cadastrar cliente</button>
           </div>
+        </div>
+        <div class="dashboard-attention-grid">
+          <section class="content-card dashboard-attention-card">
+            <div class="section-heading">
+              <div>
+                <h2>Próximos contatos</h2>
+                <p>Retornos vencidos, de hoje e dos próximos 7 dias</p>
+              </div>
+              <button class="button button-outline" data-go="vendas">Ver funil</button>
+            </div>
+            <div id="dashboardFollowups" class="dashboard-alert-list"></div>
+          </section>
+          <section class="content-card dashboard-attention-card">
+            <div class="section-heading">
+              <div>
+                <h2>Prazos de produção</h2>
+                <p>Entregas atrasadas e previstas para os próximos 7 dias</p>
+              </div>
+              <button class="button button-outline" data-go="producao">Ver produção</button>
+            </div>
+            <div id="dashboardDeadlines" class="dashboard-alert-list"></div>
+          </section>
         </div>
       </section>
 
@@ -622,7 +645,60 @@
         </div>
       </section>
       <section class="page" id="page-marketing">
-        <div class="placeholder-card"><span>◎</span><h2>Marketing</h2><p>Vamos acompanhar de onde vêm os contatos e quais canais geram mais vendas.</p></div>
+        <div class="section-heading marketing-heading">
+          <div>
+            <h2>Desempenho dos canais</h2>
+            <p>Entenda de onde vêm os contatos e quais origens geram oportunidades e vendas.</p>
+          </div>
+          <button class="button button-primary" data-go="clientes">Ver clientes</button>
+        </div>
+        <div class="marketing-notice">
+          <strong>Dados atualizados automaticamente</strong>
+          <p>Os indicadores usam a origem preenchida no cadastro do cliente e as oportunidades vinculadas a ele no Funil de vendas. Nenhum dado de marketing é inventado ou estimado.</p>
+        </div>
+        <div class="marketing-summary-grid">
+          <article class="marketing-summary-card">
+            <span>Contatos cadastrados</span>
+            <strong id="marketingContacts">0</strong>
+          </article>
+          <article class="marketing-summary-card">
+            <span>Contatos com origem</span>
+            <strong id="marketingTrackedContacts">0</strong>
+          </article>
+          <article class="marketing-summary-card">
+            <span>Oportunidades abertas</span>
+            <strong id="marketingOpenSales">0</strong>
+          </article>
+          <article class="marketing-summary-card">
+            <span>Valor de vendas concluídas</span>
+            <strong id="marketingWonValue">R$ 0,00</strong>
+          </article>
+        </div>
+        <div class="content-card marketing-channel-card">
+          <div class="list-toolbar">
+            <div>
+              <h2>Resultado por origem</h2>
+              <p id="marketingChannelCount">Nenhum canal identificado</p>
+            </div>
+            <button class="button button-outline" data-go="vendas">Acompanhar oportunidades</button>
+          </div>
+          <div class="marketing-table-wrap">
+            <table class="marketing-table">
+              <thead>
+                <tr>
+                  <th>Origem</th>
+                  <th>Contatos</th>
+                  <th>Oportunidades</th>
+                  <th>Vendas concluídas</th>
+                  <th>Conversão</th>
+                  <th>Valor fechado</th>
+                </tr>
+              </thead>
+              <tbody id="marketingChannelRows"></tbody>
+            </table>
+          </div>
+          <p class="marketing-footnote">A conversão é calculada como vendas concluídas ÷ oportunidades vinculadas à origem. Para melhorar a atribuição, preencha a origem do contato e vincule cada oportunidade ao cliente correspondente.</p>
+        </div>
       </section>
       <footer class="footer">
         <span>LR Interiores • CRM</span>
