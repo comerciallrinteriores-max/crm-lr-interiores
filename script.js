@@ -1221,7 +1221,8 @@ function loadProductionOrders() {
       startDate: typeof order.startDate === "string" ? order.startDate : "",
       deadline: typeof order.deadline === "string" ? order.deadline : "",
       deliveredDate: typeof order.deliveredDate === "string" ? order.deliveredDate : "",
-      notes: typeof order.notes === "string" ? order.notes : ""
+      notes: typeof order.notes === "string" ? order.notes : "",
+      photo: typeof order.photo === "string" && order.photo.startsWith("data:image/jpeg;base64,") ? order.photo : ""
     }));
   } catch (error) {
     console.error("Não foi possível carregar a produção:", error);
@@ -1269,9 +1270,92 @@ function renderProductionOptions(selectedSaleId = $("#productionSale").value, se
   quoteSelect.value = availableQuotes.some((quote) => quote.id === selectedQuoteId) ? selectedQuoteId : "";
 }
 
+let productionPhotoData = "";
+
+function setProductionPhotoPreview(dataUrl) {
+  productionPhotoData = dataUrl || "";
+  const wrap = $("#productionPhotoPreviewWrap");
+  const preview = $("#productionPhotoPreview");
+  preview.src = productionPhotoData;
+  wrap.hidden = !productionPhotoData;
+}
+
+function compressProductionPhoto(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Não foi possível ler essa imagem."));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("Esse formato de imagem não pôde ser aberto."));
+      image.onload = () => {
+        const maxDimension = 1200;
+        const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("Não foi possível otimizar essa imagem."));
+          return;
+        }
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        const maxBytes = 250 * 1024;
+        let quality = 0.82;
+        let dataUrl = canvas.toDataURL("image/jpeg", quality);
+        while (dataUrl.length * 0.75 > maxBytes && quality > 0.42) {
+          quality -= 0.08;
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+        }
+        while (dataUrl.length * 0.75 > maxBytes && canvas.width > 480 && canvas.height > 480) {
+          canvas.width = Math.max(1, Math.round(canvas.width * 0.82));
+          canvas.height = Math.max(1, Math.round(canvas.height * 0.82));
+          context.fillStyle = "#ffffff";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          quality = 0.68;
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+        }
+        if (dataUrl.length * 0.75 > maxBytes) {
+          reject(new Error("Não foi possível reduzir essa foto para até 250 KB. Tente uma imagem menor."));
+          return;
+        }
+        resolve(dataUrl);
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+$("#productionPhoto").addEventListener("change", async (event) => {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    alert("Selecione um arquivo de imagem.");
+    event.target.value = "";
+    return;
+  }
+  try {
+    const optimizedPhoto = await compressProductionPhoto(file);
+    setProductionPhotoPreview(optimizedPhoto);
+  } catch (error) {
+    alert(error.message || "Não foi possível processar essa foto.");
+    event.target.value = "";
+  }
+});
+
+$("#removeProductionPhotoBtn").addEventListener("click", () => {
+  setProductionPhotoPreview("");
+  $("#productionPhoto").value = "";
+});
+
 function openProductionForm(order = null) {
   const form = $("#productionForm");
   form.reset();
+  setProductionPhotoPreview("");
   $("#productionId").value = "";
   $("#productionStatus").value = "pending";
   $("#productionFormTitle").textContent = order ? "Editar ordem de produção" : "Nova ordem de produção";
@@ -1286,6 +1370,7 @@ function openProductionForm(order = null) {
     $("#productionDeadline").value = order.deadline || "";
     $("#productionDeliveredDate").value = order.deliveredDate || "";
     $("#productionNotes").value = order.notes || "";
+    setProductionPhotoPreview(order.photo || "");
   }
 
   form.hidden = false;
@@ -1365,6 +1450,7 @@ $("#productionForm").addEventListener("submit", (event) => {
     deadline: $("#productionDeadline").value,
     deliveredDate,
     notes: $("#productionNotes").value.trim(),
+    photo: productionPhotoData,
     createdAt: existing?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -1449,6 +1535,7 @@ function renderProduction(searchTerm = $("#productionSearch").value) {
           <p class="production-client-name">${escapeHTML(clientName)}</p>
           ${order.saleTitle ? `<p class="production-linked-record">Venda: ${escapeHTML(order.saleTitle)}</p>` : ""}
           ${order.quoteName ? `<p class="production-linked-record">Orçamento: ${escapeHTML(order.quoteName)}</p>` : ""}
+          ${order.photo ? `<a class="production-order-photo-link" href="${order.photo}" target="_blank" rel="noopener" aria-label="Abrir foto do projeto ${escapeHTML(order.title)}"><img class="production-order-photo" src="${order.photo}" alt="Foto de referência de ${escapeHTML(order.title)}" loading="lazy"></a>` : ""}
           <div class="production-dates">
             ${order.startDate ? `<span><small>Início</small><strong>${escapeHTML(formatProductionDate(order.startDate))}</strong></span>` : ""}
             ${order.deadline ? `<span class="${isOverdue ? "production-overdue" : ""}"><small>Prazo de entrega</small><strong>${escapeHTML(formatProductionDate(order.deadline))}${isOverdue ? " · Atrasado" : ""}</strong></span>` : ""}
