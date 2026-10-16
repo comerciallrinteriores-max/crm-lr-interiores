@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
-import { getEncryptionState, initializeCloudData, lockCloudData, changeEncryptionPassword, createEncryptedBackup, restoreEncryptedBackup } from "./firebase-data.js?v=7";
+import { getEncryptionState, initializeCloudData, lockCloudData, changeEncryptionPassword, createEncryptedBackup, restoreEncryptedBackup } from "./firebase-data.js?v=8";
 import {
   getAuth, setPersistence, browserLocalPersistence, signInWithEmailAndPassword,
   sendPasswordResetEmail, onAuthStateChanged, signOut
@@ -120,7 +120,7 @@ async function loadCRMWithEncryption(user, password, confirmation) {
     encryptionScreen.hidden = true;
     appLoading.hidden = false;
     if (!crmLoaded) {
-      await import("./script.js?v=20261016-6");
+      await import("./script.js?v=20261016-7");
       crmLoaded = true;
       loadedUid = user.uid;
     }
@@ -326,7 +326,7 @@ backupFileInput?.addEventListener("change", async () => {
     backupFileInput.value = "";
     return;
   }
-  const confirmed = window.confirm("Atenção: restaurar o backup substituirá os dados atuais do CRM nas cinco áreas (clientes, orçamentos, vendas, produção e financeiro). Faça isso somente se deseja substituir os dados atuais. Deseja continuar?");
+  const confirmed = window.confirm("Atenção: restaurar o backup substituirá os dados atuais do CRM nas áreas do CRM (clientes, orçamentos, vendas, produção, financeiro, parceiros/comissões e equipe). Faça isso somente se deseja substituir os dados atuais. Deseja continuar?");
   if (!confirmed) {
     backupFileInput.value = "";
     return;
@@ -342,7 +342,8 @@ backupFileInput?.addEventListener("change", async () => {
       "; orçamentos: " + result.counts["lr-interiores-orcamentos-v1"] +
       "; vendas: " + result.counts["lr-interiores-funil-v1"] +
       "; produção: " + result.counts["lr-interiores-producao-v1"] +
-      "; financeiro: " + result.counts["lr-interiores-financeiro-v1"] + ".");
+      "; financeiro: " + result.counts["lr-interiores-financeiro-v1"] +
+      "; equipe: " + result.counts["lr-interiores-equipe-v1"] + ".");
     backupFileInput.value = "";
     window.setTimeout(() => window.location.reload(), 1200);
   } catch (error) {
