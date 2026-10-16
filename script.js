@@ -1243,6 +1243,7 @@ function moveSaleToStage(saleId, stageId) {
     sales = previousSales;
     return;
   }
+  if (stageId === "won") syncWonSalesToFinance();
   renderSales();
 }
 
@@ -2028,25 +2029,14 @@ function closeFinanceForm() {
   $("#financeLinkedSaleInfo").hidden = true;
 }
 
-function importWonSalesToFinance() {
+function syncWonSalesToFinance() {
   const linkedSaleIds = new Set(financeEntries.map((entry) => entry.saleId).filter(Boolean));
   const eligibleSales = sales.filter((sale) =>
     sale.stage === "won" &&
     !linkedSaleIds.has(sale.id) &&
     Number(sale.expectedValue) > 0
   );
-  const wonWithoutValue = sales.filter((sale) =>
-    sale.stage === "won" &&
-    !linkedSaleIds.has(sale.id) &&
-    !(Number(sale.expectedValue) > 0)
-  );
-
-  if (eligibleSales.length === 0) {
-    alert(wonWithoutValue.length
-      ? `Não encontrei vendas concluídas com valor previsto maior que zero. Preencha o valor no Funil de vendas e tente novamente.`
-      : "Todas as vendas concluídas com valor já foram importadas. Nenhum lançamento duplicado foi criado.");
-    return;
-  }
+  if (!eligibleSales.length) return true;
 
   const previousEntries = [...financeEntries];
   const today = localISODate();
@@ -2065,7 +2055,7 @@ function importWonSalesToFinance() {
       paidDate: "",
       clientId: sale.clientId || "",
       clientName: client ? client.name : (sale.clientName || ""),
-      notes: "Importado do Funil de vendas. Atualize o valor recebido conforme o cliente realizar os pagamentos.",
+      notes: "Criado automaticamente ao concluir a venda no Funil. Atualize o valor recebido conforme o cliente realizar os pagamentos.",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -2073,13 +2063,13 @@ function importWonSalesToFinance() {
   financeEntries = [...imported, ...financeEntries];
   if (!saveFinanceEntries()) {
     financeEntries = previousEntries;
-    return;
+    return false;
   }
-  renderFinance();
-  alert(`${imported.length} venda(s) concluída(s) importada(s) para o Financeiro.${wonWithoutValue.length ? ` ${wonWithoutValue.length} venda(s) sem valor previsto foram ignoradas.` : ""}`);
+  return true;
 }
 
 function renderFinance(searchTerm = $("#financeSearch").value) {
+  syncWonSalesToFinance();
   syncPaidCommissionsToFinance();
   renderDashboard();
   const month = $("#financeMonth").value || localISODate().slice(0, 7);
@@ -2119,7 +2109,7 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
   const list = $("#financeList");
   if (filtered.length === 0) {
     list.innerHTML = `<div class="list-empty">${financeEntries.length === 0
-      ? "Nenhum lançamento financeiro ainda. Clique em “Importar vendas concluídas” ou “+ Novo lançamento” para começar."
+      ? "Nenhum lançamento financeiro ainda. Ao concluir uma venda no Funil, ela será adicionada aqui automaticamente. Você também pode clicar em “+ Novo lançamento”."
       : "Nenhum lançamento encontrado neste mês para essa busca."}</div>`;
     return;
   }
@@ -2169,7 +2159,6 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
 }
 
 $("#newFinanceEntryBtn").addEventListener("click", () => openFinanceForm());
-$("#importWonSalesBtn").addEventListener("click", importWonSalesToFinance);
 $("#cancelFinanceBtn").addEventListener("click", closeFinanceForm);
 $("#cancelFinanceBtnBottom").addEventListener("click", closeFinanceForm);
 $("#financeSearch").addEventListener("input", (event) => renderFinance(event.target.value));
