@@ -2080,6 +2080,7 @@ function importWonSalesToFinance() {
 }
 
 function renderFinance(searchTerm = $("#financeSearch").value) {
+  syncPaidCommissionsToFinance();
   renderDashboard();
   const month = $("#financeMonth").value || localISODate().slice(0, 7);
   const normalizedSearch = (searchTerm || "").trim().toLocaleLowerCase("pt-BR");
@@ -2636,7 +2637,54 @@ function setCommissionStatus(id, status) {
     commissions = previous;
     return;
   }
+  if (status === "paid" && !syncPaidCommissionsToFinance()) {
+    commissions = previous;
+    saveCommissions();
+    return;
+  }
   renderPartners();
+  if (status === "paid") renderFinance();
+}
+
+function syncPaidCommissionsToFinance() {
+  if (!Array.isArray(commissions) || !Array.isArray(financeEntries)) return true;
+  const existingCommissionIds = new Set(
+    financeEntries.map((entry) => entry.linkedCommissionId).filter(Boolean)
+  );
+  const now = new Date().toISOString();
+  const missingEntries = commissions
+    .filter((commission) => commission.status === "paid" && !existingCommissionIds.has(commission.id))
+    .map((commission) => {
+      const paidDate = /^\\d{4}-\\d{2}-\\d{2}$/.test((commission.paidAt || "").slice(0, 10))
+        ? commission.paidAt.slice(0, 10)
+        : localISODate();
+      return {
+        id: createId(),
+        linkedCommissionId: commission.id,
+        type: "expense",
+        description: `Comissão — ${commission.partnerName || "Parceiro"}`,
+        category: "Comissões",
+        amount: Math.round(Math.max(0, Number(commission.amount) || 0) * 100) / 100,
+        paidAmount: 0,
+        payments: [],
+        dueDate: paidDate,
+        status: "paid",
+        paidDate,
+        clientId: "",
+        clientName: commission.partnerName || "",
+        notes: `Comissão paga vinculada ao orçamento “${commission.quoteName || "Sem orçamento"}” (${Number(commission.rate) || 0}%). Lançamento gerado automaticamente pelo módulo Parceiros / Comissões.`,
+        createdAt: now,
+        updatedAt: now
+      };
+    });
+  if (!missingEntries.length) return true;
+  const previousEntries = [...financeEntries];
+  financeEntries = [...missingEntries, ...financeEntries];
+  if (!saveFinanceEntries()) {
+    financeEntries = previousEntries;
+    return false;
+  }
+  return true;
 }
 
 function renderPartners() {
