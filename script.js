@@ -1848,7 +1848,25 @@ function localDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
-function renderProductionCalendar(orders = productionOrders) {
+function renderProductionCalendar(orders) {
+  if (!orders) {
+    const normalizedSearch = ($("#productionSearch").value || "").trim().toLocaleLowerCase("pt-BR");
+    const selectedStatus = $("#productionStatusFilter")?.value || "all";
+    const today = localISODate();
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const horizon = localISODate(nextWeek);
+    orders = productionOrders.filter((order) => {
+      const client = clients.find((item) => item.id === order.clientId);
+      const clientName = client?.name || order.clientName || "";
+      const searchable = `${order.title} ${clientName} ${order.saleTitle} ${order.quoteName} ${order.notes}`
+        .toLocaleLowerCase("pt-BR").includes(normalizedSearch);
+      const overdue = order.deadline && order.deadline < today && order.status !== "delivered";
+      const matchesStatus = selectedStatus === "all" ||
+        (selectedStatus === "overdue" ? overdue : order.status === selectedStatus);
+      return searchable && matchesStatus;
+    });
+  }
   const year = productionCalendarDate.getFullYear();
   const month = productionCalendarDate.getMonth();
   const monthName = productionCalendarDate.toLocaleDateString("pt-BR", {
