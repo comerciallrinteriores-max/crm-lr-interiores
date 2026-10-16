@@ -35,6 +35,18 @@ let queues = new Map();
 let pendingWrites = 0;
 let lastWriteError = false;
 
+function startupDiagnosticsEnabled() {
+  return new URLSearchParams(globalThis.location?.search || "").get("debugPerformance") === "1";
+}
+
+function logStartupTiming(label, startedAt, details = {}) {
+  if (!startupDiagnosticsEnabled()) return;
+  console.info("[CRM startup]", label, {
+    durationMs: Math.round(performance.now() - startedAt),
+    ...details
+  });
+}
+
 const statusElement = () => document.getElementById("cloudSyncStatus");
 function setStatus(message, state = "ok") {
   const element = statusElement();
@@ -118,7 +130,12 @@ async function readCloudStore(uid, storeName, key) {
     } else {
       throw fail("INVALID_CLOUD_RECORD", "Foi encontrado um registro inválido na nuvem em " + storeName + ".");
     }
-    records.push({ record, position: Number(value.position || 0), documentId: item.id });
+    records.push({
+      record,
+      position: Number(value.position || 0),
+      documentId: item.id,
+      encrypted: value.encrypted === true
+    });
   }
   records.sort((a, b) => a.position - b.position);
   return {
@@ -216,14 +233,19 @@ export async function initializeCloudData(uid, password, confirmation = "") {
     throw fail("WEAK_ENCRYPTION_PASSWORD", "Use uma senha de criptografia com pelo menos 10 caracteres.");
   }
 
+  const startupStartedAt = performance.now();
   setStatus("Preparando criptografia…", "busy");
   const securityDocument = securityRef(uid);
+  let phaseStartedAt = performance.now();
   let securitySnapshot = await getDoc(securityDocument);
+  logStartupTiming("security-document-read", phaseStartedAt);
   let security = securitySnapshot.exists() ? securitySnapshot.data() : null;
   let key;
 
   if (security && security.cryptoVersion === 1 && security.salt && security.verifier) {
+    phaseStartedAt = performance.now();
     key = await deriveKey(password, base64ToBytes(security.salt));
+    logStartupTiming("key-derivation", phaseStartedAt);
     try {
       const verifier = await decryptText(key, security.verifier);
       if (verifier !== "LR-INTERIORES-CRM-ENCRYPTION-KEY-CHECK-v1") {
@@ -240,7 +262,9 @@ export async function initializeCloudData(uid, password, confirmation = "") {
       throw fail("UNSUPPORTED_ENCRYPTION_STATE", "O estado de criptografia precisa ser verificado antes de continuar.");
     }
     const salt = crypto.getRandomValues(new Uint8Array(16));
+    phaseStartedAt = performance.now();
     key = await deriveKey(password, salt);
+    logStartupTiming("key-derivation-first-setup", phaseStartedAt);
     const verifier = await encryptText(key, "LR-INTERIORES-CRM-ENCRYPTION-KEY-CHECK-v1");
     security = {
       cryptoVersion: 1,
@@ -266,10 +290,40 @@ export async function initializeCloudData(uid, password, confirmation = "") {
       }
     }
 
+    phaseStartedAt = performance.now();
     const cloud = await readCloudStore(uid, storeName, key);
+    logStartupTiming("cloud-read-and-decrypt:" + storeName, phaseStartedAt, {
+      records: cloud.records.length
+    });
+
     // Preserve the cloud as the source of truth once it has been initialized.
     const records = cloud.initialized || cloud.rawRecords.length > 0 ? cloud.records : localRecords;
-    await writeEncryptedStore(uid, storeName, records, key);
+
+    // A fully initialized store that is already encrypted and in canonical order
+    // does not need to be encrypted and written back again during every login.
+    // Legacy/plaintext stores and incomplete migrations still go through the full write path.
+    const cloudAlreadyCanonical = cloud.initialized &&
+      cloud.rawRecords.length === records.length &&
+      cloud.rawRecords.every((entry, index) =>
+        entry.encrypted === true &&
+        entry.documentId === records[index]?.id &&
+        entry.position === index
+      );
+
+    if (cloudAlreadyCanonical) {
+      if (startupDiagnosticsEnabled()) {
+        console.info("[CRM startup]", "cloud-write-skipped:" + storeName, {
+          records: records.length,
+          reason: "already-encrypted-and-canonical"
+        });
+      }
+    } else {
+      phaseStartedAt = performance.now();
+      await writeEncryptedStore(uid, storeName, records, key);
+      logStartupTiming("cloud-migration-write:" + storeName, phaseStartedAt, {
+        records: records.length
+      });
+    }
     initialValues[storageKey] = JSON.stringify(records);
   }
 
@@ -280,6 +334,9 @@ export async function initializeCloudData(uid, password, confirmation = "") {
   lastWriteError = false;
   installMemoryStorage(uid, key, initialValues);
   setStatus("Dados criptografados e sincronizados", "ok");
+  logStartupTiming("initialize-cloud-data-total", startupStartedAt, {
+    stores: Object.keys(stores).length
+  });
 }
 
 
