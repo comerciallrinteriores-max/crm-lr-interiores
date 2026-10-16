@@ -923,6 +923,8 @@ textarea {
 .team-notice strong { display: block; margin-bottom: 5px; color: var(--green); }
 .team-notice p { margin: 0; color: var(--muted); line-height: 1.6; }
 .team-form { margin-bottom: 22px; }
+.team-payment-form { border-color: #d6e5da; background: #fbfdfb; }
+.team-payment-form #teamPaymentCalculated { color: var(--green); font-weight: 700; background: #f3f8f4; }
 .team-form-hint { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .team-list { display: grid; gap: 10px; }
 .team-row { display: flex; align-items: center; gap: 14px; padding: 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
