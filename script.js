@@ -1285,7 +1285,19 @@ $("#saleForm").addEventListener("submit", (event) => {
   }
 
   closeSaleForm();
+
+  const newlyWon = opportunity.stage === "won" && existing?.stage !== "won";
+  if (opportunity.stage === "won") {
+    const financeSynced = syncWonSalesToFinance();
+    if (!financeSynced) {
+      alert("A venda foi salva, mas não foi possível atualizar o Financeiro agora. Abra a área Financeiro para tentar sincronizar novamente.");
+    } else if (newlyWon) {
+      alert("Venda concluída! O lançamento correspondente foi conferido no Financeiro. Confira o vencimento e registre os recebimentos conforme o cliente pagar.");
+    }
+  }
+
   renderSales();
+  renderDashboard();
 });
 
 function formatSalesDate(value) {
