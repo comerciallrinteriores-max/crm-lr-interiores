@@ -2348,8 +2348,12 @@ $("#financeList").addEventListener("click", (event) => {
       alert("Não é possível excluir um lançamento com pagamento/recebimento registrado. Para preservar o histórico financeiro, mantenha o lançamento e ajuste o status se necessário.");
       return;
     }
-    if (entry.saleId || entry.linkedCommissionId) {
-      alert("Este lançamento está vinculado a uma venda ou comissão. Resolva o vínculo na área de origem antes de excluir, para não deixar o histórico inconsistente.");
+    if (entry.saleId) {
+      alert("Este lançamento foi gerado para uma oportunidade do Funil. Para removê-lo, vá ao Funil e exclua a oportunidade vinculada. O CRM removerá junto apenas este lançamento se ele estiver pendente e sem pagamentos; se houver recebimentos ou projeto na Produção, a exclusão será bloqueada para preservar o histórico.");
+      return;
+    }
+    if (entry.linkedCommissionId) {
+      alert("Este lançamento está vinculado a uma comissão. Acesse Parceiros / Comissões e resolva o vínculo por lá. Se a comissão não aparecer, pode ser um vínculo antigo sem registro correspondente; não exclua o lançamento manualmente antes de conferir o histórico.");
       return;
     }
     if (!confirm(`Deseja realmente excluir o lançamento "${entry.description}"?`)) return;
