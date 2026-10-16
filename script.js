@@ -3046,8 +3046,8 @@ function renderTeamMembers() {
   );
   $("#teamMemberCount").textContent = `${filtered.length} ${filtered.length === 1 ? "pessoa cadastrada" : "pessoas cadastradas"}`;
   $("#teamMemberList").innerHTML = filtered.length ? filtered.map((member) => {
-    const modeLabel = member.paymentMode === "Diário" ? "Diária" : "Mensal";
-    const amountLabel = member.paymentMode === "Diário" ? "Valor por dia" : "Valor mensal";
+    const modeLabel = member.paymentMode === "Diário" ? "Diária" : member.paymentMode === "Mensal" ? "Mensal" : "Outro";
+    const amountLabel = member.paymentMode === "Diário" ? "Valor por dia" : member.paymentMode === "Mensal" ? "Valor mensal" : "Valor por pagamento";
     return `<article class="team-row">
       <div class="team-avatar">${escapeHTML(member.name.slice(0, 2).toLocaleUpperCase("pt-BR"))}</div>
       <div class="team-info"><strong>${escapeHTML(member.name)}</strong><span>${escapeHTML(member.role)}</span>
