@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
-import { getEncryptionState, initializeCloudData, lockCloudData, changeEncryptionPassword, createEncryptedBackup, restoreEncryptedBackup } from "./firebase-data.js?v=5";
+import { getEncryptionState, initializeCloudData, lockCloudData, changeEncryptionPassword, createEncryptedBackup, restoreEncryptedBackup } from "./firebase-data.js?v=6";
 import {
   getAuth, setPersistence, browserLocalPersistence, signInWithEmailAndPassword,
   onAuthStateChanged, signOut
