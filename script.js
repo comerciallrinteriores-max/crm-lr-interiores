@@ -111,6 +111,7 @@ const pageNames = {
   orcamentos: "Orçamentos e custos",
   vendas: "Funil de vendas",
   producao: "Produção e entregas",
+  equipe: "Equipe",
   financeiro: "Financeiro",
   marketing: "Marketing",
   parceiros: "Parceiros / Comissões"
@@ -146,6 +147,7 @@ function navigateTo(pageName) {
   if (pageName === "orcamentos") renderQuotes();
   if (pageName === "vendas") renderSales();
   if (pageName === "producao") renderProduction();
+  if (pageName === "equipe") renderTeamMembers();
   if (pageName === "financeiro") renderFinance();
   if (pageName === "marketing") renderMarketing();
   if (pageName === "parceiros") renderPartners();
@@ -2905,3 +2907,144 @@ $("#commissionList").addEventListener("click", (event) => {
   }
   setCommissionStatus(button.dataset.commissionId, button.dataset.commissionAction);
 });
+
+
+/* ---------- Cadastro de equipe ---------- */
+const TEAM_STORAGE_KEY = "lr-interiores-equipe-v1";
+let teamMembers = loadTeamMembers();
+
+function loadTeamMembers() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TEAM_STORAGE_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item) => item && typeof item.id === "string" && typeof item.name === "string")
+      .map((item) => ({
+        ...item,
+        name: item.name.trim(),
+        role: typeof item.role === "string" ? item.role : "",
+        paymentMode: item.paymentMode === "Mensal" ? "Mensal" : "Diário",
+        amount: Math.max(0, Number(item.amount) || 0),
+        createdAt: item.createdAt || new Date().toISOString(),
+        updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+      }));
+  } catch (error) {
+    console.error("Não foi possível carregar a equipe:", error);
+    return [];
+  }
+}
+
+function saveTeamMembers() {
+  try {
+    localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(teamMembers));
+    return true;
+  } catch (error) {
+    console.error("Não foi possível salvar a equipe:", error);
+    alert("Não foi possível preparar o cadastro da equipe para sincronização. Confira a conexão com o Firebase e tente novamente.");
+    return false;
+  }
+}
+
+function updateTeamPaymentFields() {
+  const isDaily = $("#teamPaymentMode").value === "Diário";
+  $("#teamAmountLabel").textContent = isDaily ? "Valor da diária (R$) *" : "Valor mensal (R$) *";
+  $("#teamAmount").placeholder = isDaily ? "Ex.: 150,00 por dia" : "Ex.: 2.500,00 por mês";
+  $("#teamPaymentHint").textContent = isDaily
+    ? "Informe o valor de um dia trabalhado. A quantidade de dias será preenchida em cada pagamento na etapa de integração com o Financeiro."
+    : "Informe o valor fixo mensal. Não será necessário informar quantidade de dias no cadastro mensal.";
+}
+
+function openTeamMemberForm(member = null) {
+  const form = $("#teamForm");
+  form.reset();
+  $("#teamMemberId").value = "";
+  $("#teamPaymentMode").value = member?.paymentMode || "Diário";
+  $("#teamFormTitle").textContent = member ? "Editar pessoa da equipe" : "Nova pessoa da equipe";
+  if (member) {
+    $("#teamMemberId").value = member.id;
+    $("#teamMemberName").value = member.name || "";
+    $("#teamMemberRole").value = member.role || "";
+    $("#teamPaymentMode").value = member.paymentMode;
+    $("#teamAmount").value = String(member.amount);
+  }
+  updateTeamPaymentFields();
+  form.hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#teamMemberName").focus({ preventScroll: true });
+}
+
+function closeTeamMemberForm() {
+  $("#teamForm").hidden = true;
+  $("#teamForm").reset();
+  $("#teamMemberId").value = "";
+  updateTeamPaymentFields();
+}
+
+function renderTeamMembers() {
+  const term = ($("#teamSearch").value || "").trim().toLocaleLowerCase("pt-BR");
+  const filtered = teamMembers.filter((member) =>
+    `${member.name} ${member.role}`.toLocaleLowerCase("pt-BR").includes(term)
+  );
+  $("#teamMemberCount").textContent = `${filtered.length} ${filtered.length === 1 ? "pessoa cadastrada" : "pessoas cadastradas"}`;
+  $("#teamMemberList").innerHTML = filtered.length ? filtered.map((member) => {
+    const modeLabel = member.paymentMode === "Diário" ? "Diária" : "Mensal";
+    const amountLabel = member.paymentMode === "Diário" ? "Valor por dia" : "Valor mensal";
+    return `<article class="team-row">
+      <div class="team-avatar">${escapeHTML(member.name.slice(0, 2).toLocaleUpperCase("pt-BR"))}</div>
+      <div class="team-info"><strong>${escapeHTML(member.name)}</strong><span>${escapeHTML(member.role)}</span>
+        <small>${modeLabel} • ${amountLabel}: ${formatBRL(member.amount)}</small></div>
+      <div class="team-actions">
+        <button type="button" class="button button-outline" data-team-edit="${escapeHTML(member.id)}">Editar</button>
+        <button type="button" class="button button-danger" data-team-delete="${escapeHTML(member.id)}">Excluir</button>
+      </div>
+    </article>`;
+  }).join("") : '<div class="list-empty">Nenhuma pessoa cadastrada. Clique em “+ Nova pessoa” para começar.</div>';
+}
+
+$("#newTeamMemberBtn").addEventListener("click", () => openTeamMemberForm());
+$("#cancelTeamBtn").addEventListener("click", closeTeamMemberForm);
+$("#cancelTeamBtnBottom").addEventListener("click", closeTeamMemberForm);
+$("#teamPaymentMode").addEventListener("change", updateTeamPaymentFields);
+$("#teamSearch").addEventListener("input", renderTeamMembers);
+
+$("#teamForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const id = $("#teamMemberId").value;
+  const name = $("#teamMemberName").value.trim();
+  const role = $("#teamMemberRole").value.trim();
+  const paymentMode = $("#teamPaymentMode").value;
+  const amount = Number($("#teamAmount").value);
+  if (!name || !role || !["Diário", "Mensal"].includes(paymentMode) || !Number.isFinite(amount) || amount <= 0) {
+    alert("Preencha o nome, a função, o modo de recebimento e um valor maior que zero.");
+    return;
+  }
+  const existing = teamMembers.find((item) => item.id === id);
+  const previous = [...teamMembers];
+  const now = new Date().toISOString();
+  const record = { id: id || createId(), name, role, paymentMode, amount: Math.round(amount * 100) / 100,
+    createdAt: existing?.createdAt || now, updatedAt: now };
+  teamMembers = id ? teamMembers.map((item) => item.id === id ? record : item) : [record, ...teamMembers];
+  if (!saveTeamMembers()) { teamMembers = previous; return; }
+  closeTeamMemberForm();
+  renderTeamMembers();
+});
+
+$("#teamMemberList").addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-team-edit]");
+  const deleteButton = event.target.closest("[data-team-delete]");
+  if (editButton) {
+    const member = teamMembers.find((item) => item.id === editButton.dataset.teamEdit);
+    if (member) openTeamMemberForm(member);
+    return;
+  }
+  if (deleteButton) {
+    const member = teamMembers.find((item) => item.id === deleteButton.dataset.teamDelete);
+    if (!member) return;
+    if (!confirm(`Deseja excluir o cadastro de “${member.name}”?`)) return;
+    const previous = [...teamMembers];
+    teamMembers = teamMembers.filter((item) => item.id !== member.id);
+    if (!saveTeamMembers()) { teamMembers = previous; return; }
+    renderTeamMembers();
+  }
+});
+
+updateTeamPaymentFields();
