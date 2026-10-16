@@ -514,6 +514,11 @@ export async function restoreEncryptedBackup(fileContents, password, uid) {
   ) };
 }
 
+// Automatic inactivity lock is allowed only when every queued cloud write has settled successfully.
+export function isCloudDataSafeToLock() {
+  return Boolean(activeKey && originalGetItem && pendingWrites === 0 && !lastWriteError);
+}
+
 export function lockCloudData() {
   activeKey = null;
   memoryStores.clear();
