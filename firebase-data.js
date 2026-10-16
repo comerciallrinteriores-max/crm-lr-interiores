@@ -21,7 +21,8 @@ const stores = {
   "lr-interiores-funil-v1": "vendas",
   "lr-interiores-producao-v1": "producao",
   "lr-interiores-parceiros-v1": "parceiros",
-  "lr-interiores-comissoes-v1": "comissoes"
+  "lr-interiores-comissoes-v1": "comissoes",
+  "lr-interiores-equipe-v1": "equipe"
 };
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -500,9 +501,9 @@ export async function restoreEncryptedBackup(fileContents, password, uid) {
   if (!decoded || decoded.format !== BACKUP_FORMAT || decoded.version !== BACKUP_VERSION) {
     throw fail("INVALID_BACKUP_CONTENT", "O conteúdo descriptografado do backup não é válido.");
   }
-  // Backups created before the partners module did not contain these optional stores.
-  // Treat them as empty during a full restore so older valid backups remain usable.
-  for (const storageKey of ["lr-interiores-parceiros-v1", "lr-interiores-comissoes-v1"]) {
+  // Older backups may not contain stores added in later CRM versions.
+  // Treat those optional stores as empty during restore so valid older backups remain usable.
+  for (const storageKey of ["lr-interiores-parceiros-v1", "lr-interiores-comissoes-v1", "lr-interiores-equipe-v1"]) {
     if (!Array.isArray(decoded.stores[storageKey])) decoded.stores[storageKey] = [];
   }
   validateBackupStores(decoded.stores);
