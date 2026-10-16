@@ -235,3 +235,48 @@
   .finance-heading-actions { width: 100%; justify-content: stretch; }
   .finance-heading-actions .button { flex: 1 1 auto; }
 }
+
+
+/* Visualizações do Financeiro */
+.finance-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+.finance-view-tab {
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 14px;
+  background: #fff;
+  color: #526258;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease, border-color .18s ease;
+}
+.finance-view-tab:hover {
+  border-color: #9ab5a2;
+  color: var(--green);
+}
+.finance-view-tab.active {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+.finance-view-tab:focus-visible {
+  outline: 3px solid rgba(47, 112, 71, .22);
+  outline-offset: 2px;
+}
+.finance-view-help {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (max-width: 650px) {
+  .finance-view-tabs { gap: 6px; }
+  .finance-view-tab { flex: 1 1 calc(50% - 6px); padding: 10px 8px; }
+}
