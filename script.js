@@ -476,6 +476,22 @@ function renderDashboard() {
   $("#dashboardOpenSales").textContent = openSales.length;
   $("#dashboardReceivedMonth").textContent = formatBRL(receivedThisMonth);
 
+  const pipelineValue = openSales.reduce((sum, sale) => sum + Math.max(0, Number(sale.expectedValue) || 0), 0);
+  const receivableValue = financeEntries.reduce((sum, entry) => sum + financeOutstandingAmount(entry), 0);
+  const payableValue = financeEntries.reduce((sum, entry) => {
+    if (entry.type !== "expense" || entry.status === "paid") return sum;
+    return sum + Math.max(0, (Number(entry.amount) || 0) - (Number(entry.paidAmount) || 0));
+  }, 0);
+  const today = localISODate();
+  const overdueProduction = productionOrders.filter((order) =>
+    order.status !== "delivered" && order.deadline && order.deadline < today
+  ).length;
+
+  $("#dashboardPipelineValue").textContent = formatBRL(pipelineValue);
+  $("#dashboardReceivableValue").textContent = formatBRL(receivableValue);
+  $("#dashboardPayableValue").textContent = formatBRL(payableValue);
+  $("#dashboardOverdueProduction").textContent = overdueProduction;
+
   renderDashboardFollowups();
   renderDashboardDeadlines();
 
