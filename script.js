@@ -390,6 +390,33 @@ $("#clientSearch").addEventListener("input", (event) =>
   renderClients(event.target.value)
 );
 
+/* ---------- Proteção de vínculos entre módulos ---------- */
+function linkedRecordsForClient(clientId) {
+  const clientQuotes = quotes.filter((item) => item.clientId === clientId);
+  const quoteIds = new Set(clientQuotes.map((item) => item.id));
+  const clientSales = sales.filter((item) => item.clientId === clientId || quoteIds.has(item.quoteId));
+  const saleIds = new Set(clientSales.map((item) => item.id));
+  const clientProduction = productionOrders.filter((item) =>
+    item.clientId === clientId || quoteIds.has(item.quoteId) || saleIds.has(item.saleId)
+  );
+  const clientFinance = financeEntries.filter((item) =>
+    item.clientId === clientId || saleIds.has(item.saleId) ||
+    (item.quoteId && quoteIds.has(item.quoteId))
+  );
+  const clientCommissions = commissions.filter((item) => quoteIds.has(item.quoteId));
+  return { quotes: clientQuotes, sales: clientSales, production: clientProduction, finance: clientFinance, commissions: clientCommissions };
+}
+
+function explainBlockedDelete(type, label, related) {
+  const details = [];
+  if (related.quotes?.length) details.push(`${related.quotes.length} orçamento(s)`);
+  if (related.sales?.length) details.push(`${related.sales.length} oportunidade(s) no Funil`);
+  if (related.production?.length) details.push(`${related.production.length} projeto(s) na Produção`);
+  if (related.finance?.length) details.push(`${related.finance.length} lançamento(s) no Financeiro`);
+  if (related.commissions?.length) details.push(`${related.commissions.length} vínculo(s)/comissão(ões) de parceiro`);
+  alert(`Não é possível excluir ${type} “${label}” porque existem registros vinculados: ${details.join(", ")}. Resolva os vínculos primeiro para preservar o histórico do CRM.`);
+}
+
 $("#clientList").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
@@ -405,6 +432,11 @@ $("#clientList").addEventListener("click", (event) => {
   }
 
   if (button.dataset.action === "delete") {
+    const related = linkedRecordsForClient(client.id);
+    if (related.quotes.length || related.sales.length || related.production.length || related.finance.length || related.commissions.length) {
+      explainBlockedDelete("o cliente", client.name, related);
+      return;
+    }
     const confirmed = confirm(
       `Deseja realmente excluir o cadastro de "${client.name}"?`
     );
@@ -1033,6 +1065,19 @@ $("#quoteList").addEventListener("click", (event) => {
     );
 
     if (!quote) return;
+    const related = {
+      quotes: [],
+      sales: sales.filter((item) => item.quoteId === quote.id),
+      production: productionOrders.filter((item) => item.quoteId === quote.id),
+      finance: financeEntries.filter((entry) =>
+        entry.quoteId === quote.id || sales.some((sale) => sale.quoteId === quote.id && entry.saleId === sale.id)
+      ),
+      commissions: commissions.filter((item) => item.quoteId === quote.id)
+    };
+    if (related.sales.length || related.production.length || related.finance.length || related.commissions.length) {
+      explainBlockedDelete("o orçamento", quote.name, related);
+      return;
+    }
 
     if (!confirm(
       `Deseja realmente excluir o orçamento "${quote.name}"?`
@@ -1329,6 +1374,19 @@ $("#salesBoard").addEventListener("click", (event) => {
   if (deleteButton) {
     const sale = sales.find((item) => item.id === deleteButton.dataset.saleDelete);
     if (!sale) return;
+    const linkedProduction = productionOrders.filter((item) => item.saleId === sale.id);
+    const linkedFinance = financeEntries.filter((item) => item.saleId === sale.id);
+    const linkedCommissions = commissions.filter((item) => item.quoteId && item.quoteId === sale.quoteId);
+    if (linkedProduction.length || linkedFinance.length || linkedCommissions.length) {
+      explainBlockedDelete("a oportunidade do Funil", sale.title, {
+        quotes: [],
+        sales: [],
+        production: linkedProduction,
+        finance: linkedFinance,
+        commissions: linkedCommissions
+      });
+      return;
+    }
     if (!confirm(`Deseja realmente excluir a oportunidade "${sale.title}"?`)) return;
 
     const previousSales = [...sales];
@@ -1859,6 +1917,17 @@ $("#productionList").addEventListener("click", (event) => {
   if (deleteButton) {
     const order = productionOrders.find((item) => item.id === deleteButton.dataset.productionDelete);
     if (!order) return;
+    const relatedFinance = financeEntries.filter((entry) =>
+      (order.saleId && entry.saleId === order.saleId) ||
+      (order.clientId && entry.clientId === order.clientId && entry.status === "paid")
+    );
+    if (order.status === "delivered" || relatedFinance.some((entry) =>
+      entry.status === "paid" || Number(entry.paidAmount) > 0 ||
+      (Array.isArray(entry.payments) && entry.payments.some((payment) => Number(payment.amount) > 0))
+    )) {
+      alert("Não é possível excluir este projeto porque ele já foi entregue ou possui recebimentos/pagamentos registrados. Preserve o histórico e altere o status se necessário.");
+      return;
+    }
     if (!confirm(`Deseja realmente excluir o projeto "${order.title}"?`)) return;
     const previousOrders = [...productionOrders];
     productionOrders = productionOrders.filter((item) => item.id !== order.id);
@@ -2247,6 +2316,16 @@ $("#financeList").addEventListener("click", (event) => {
     return;
   }
   if (action === "delete") {
+    const hasPayments = entry.status === "paid" || Number(entry.paidAmount) > 0 ||
+      (Array.isArray(entry.payments) && entry.payments.some((payment) => Number(payment.amount) > 0));
+    if (hasPayments) {
+      alert("Não é possível excluir um lançamento com pagamento/recebimento registrado. Para preservar o histórico financeiro, mantenha o lançamento e ajuste o status se necessário.");
+      return;
+    }
+    if (entry.saleId || entry.linkedCommissionId) {
+      alert("Este lançamento está vinculado a uma venda ou comissão. Resolva o vínculo na área de origem antes de excluir, para não deixar o histórico inconsistente.");
+      return;
+    }
     if (!confirm(`Deseja realmente excluir o lançamento "${entry.description}"?`)) return;
     const previousEntries = [...financeEntries];
     financeEntries = financeEntries.filter((item) => item.id !== entry.id);
