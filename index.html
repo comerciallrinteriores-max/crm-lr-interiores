@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#173d32">
   <title>CRM | LR Interiores</title>
-  <link rel="stylesheet" href="style.css?v=20261016-1">
+  <link rel="stylesheet" href="style.css?v=20261016-2">
   <link rel="stylesheet" href="orcamentos.css?v=20261015-2">
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
   <link rel="stylesheet" href="producao.css?v=20261015-2">
   <link rel="stylesheet" href="financeiro.css?v=20261015-2">
   <link rel="stylesheet" href="marketing.css?v=20261015-1">
-  <script type="module" src="firebase-auth.js?v=8"></script>
+  <script type="module" src="firebase-auth.js?v=9"></script>
   <script type="module" src="idle-lock.js?v=2"></script>
   <style>[hidden] { display: none !important; }</style>
 </head>
@@ -64,6 +64,7 @@
         <button class="nav-item" data-page="orcamentos">▤ <span>Orçamentos</span></button>
         <button class="nav-item" data-page="vendas">↗ <span>Funil de vendas</span></button>
         <button class="nav-item" data-page="producao">⚒ <span>Produção e entregas</span></button>
+        <button class="nav-item" data-page="equipe">♙ <span>Equipe</span></button>
         <button class="nav-item" data-page="financeiro">R$ <span>Financeiro</span></button>
         <button class="nav-item" data-page="marketing">◎ <span>Marketing</span></button>
         <button class="nav-item" data-page="parceiros">♧ <span>Parceiros / Comissões</span></button>
@@ -821,6 +822,36 @@
             <input id="commissionSearch" class="search-input" placeholder="Buscar parceiro, projeto ou cliente..." aria-label="Buscar comissões">
           </div>
           <div id="commissionList" class="commission-list"></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-equipe">
+        <div class="section-heading">
+          <div><h2>Cadastro de Equipe</h2><p>Cadastre quem trabalha com a LR Interiores e defina como cada pessoa recebe.</p></div>
+          <button class="button button-primary" id="newTeamMemberBtn">+ Nova pessoa</button>
+        </div>
+        <div class="team-notice"><strong>Como funciona o recebimento</strong>
+          <p>No modo diário, o valor cadastrado é a diária. A quantidade de dias trabalhados será informada em cada pagamento quando fizermos a integração com o Financeiro. No modo mensal, o valor cadastrado é fixo por mês.</p>
+        </div>
+        <form id="teamForm" class="content-card team-form" hidden>
+          <div class="form-heading"><div><h2 id="teamFormTitle">Nova pessoa da equipe</h2><p>Preencha os dados de cadastro e recebimento.</p></div>
+            <button type="button" class="button button-outline" id="cancelTeamBtn">Cancelar</button>
+          </div>
+          <input type="hidden" id="teamMemberId">
+          <div class="form-grid">
+            <label>Nome completo *<input id="teamMemberName" required maxlength="150" placeholder="Nome da pessoa"></label>
+            <label>Função *<input id="teamMemberRole" required maxlength="100" placeholder="Ex.: Montador, ajudante, instalador"></label>
+            <label>Modo de recebimento *<select id="teamPaymentMode" required><option value="Diário">Diário</option><option value="Mensal">Mensal</option></select></label>
+            <label><span id="teamAmountLabel">Valor da diária (R$) *</span><input id="teamAmount" type="number" min="0.01" max="100000000" step="0.01" required placeholder="Ex.: 150,00 por dia"></label>
+          </div>
+          <p class="team-form-hint" id="teamPaymentHint">Informe quanto a pessoa recebe por dia trabalhado.</p>
+          <div class="form-actions"><button type="button" class="button button-outline" id="cancelTeamBtnBottom">Cancelar</button><button type="submit" class="button button-primary">Salvar cadastro</button></div>
+        </form>
+        <div class="content-card">
+          <div class="list-toolbar"><div><h2>Pessoas cadastradas</h2><p id="teamMemberCount">0 pessoas cadastradas</p></div>
+            <input id="teamSearch" class="search-input" placeholder="Buscar por nome ou função..." aria-label="Buscar equipe">
+          </div>
+          <div id="teamMemberList" class="team-list"></div>
         </div>
       </section>
 
