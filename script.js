@@ -1446,7 +1446,7 @@ function renderSales(searchTerm = $("#salesSearch").value) {
                   <strong>${formatBRL(sale.expectedValue)}</strong>
                 </div>
                 ${sale.nextAction ? `<div class="sales-card-detail"><small>Próxima ação</small><span>${escapeHTML(sale.nextAction)}</span></div>` : ""}
-                ${sale.followupDate ? `<div class="sales-card-detail"><small>Próximo contato</small><span>${escapeHTML(formatSalesDate(sale.followupDate))}</span></div>` : ""}
+                ${sale.followupDate ? (() => { const followupState = sale.followupDate < localISODate() ? "overdue" : sale.followupDate === localISODate() ? "today" : "upcoming"; const followupLabel = followupState === "overdue" ? "Atrasado" : followupState === "today" ? "Hoje" : "Agendado"; return `<div class="sales-card-detail sales-followup-detail sales-followup-${followupState}"><small>Próximo contato</small><span>${escapeHTML(formatSalesDate(sale.followupDate))}<span class="sales-followup-badge">${followupLabel}</span></span></div>`; })() : ""}
                 <label class="sales-move-label">Mover para
                   <select data-sale-stage="${escapeHTML(sale.id)}" aria-label="Mover ${escapeHTML(sale.title)} para outra etapa">${stageOptions}</select>
                 </label>
