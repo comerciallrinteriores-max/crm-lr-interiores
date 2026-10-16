@@ -1377,7 +1377,13 @@ $("#salesBoard").addEventListener("click", (event) => {
     const linkedProduction = productionOrders.filter((item) => item.saleId === sale.id);
     const linkedFinance = financeEntries.filter((item) => item.saleId === sale.id);
     const linkedCommissions = commissions.filter((item) => item.quoteId && item.quoteId === sale.quoteId);
-    if (linkedProduction.length || linkedFinance.length || linkedCommissions.length) {
+    const financeHasPayments = linkedFinance.some((entry) =>
+      entry.status === "paid" || Number(entry.paidAmount) > 0 ||
+      (Array.isArray(entry.payments) && entry.payments.some((payment) => Number(payment.amount) > 0))
+    );
+
+    // Um recebimento/pagamento ou projeto de produção exige preservar o histórico.
+    if (linkedProduction.length || linkedCommissions.length || financeHasPayments) {
       explainBlockedDelete("a oportunidade do Funil", sale.title, {
         quotes: [],
         sales: [],
@@ -1387,15 +1393,35 @@ $("#salesBoard").addEventListener("click", (event) => {
       });
       return;
     }
-    if (!confirm(`Deseja realmente excluir a oportunidade "${sale.title}"?`)) return;
+
+    const financeWarning = linkedFinance.length
+      ? `\n\nTambém serão removidos ${linkedFinance.length} lançamento(s) pendente(s) e sem pagamentos que foram gerados para esta oportunidade.`
+      : "";
+    if (!confirm(`Deseja realmente excluir a oportunidade "${sale.title}"?${financeWarning}\n\nEsta ação não pode ser desfeita.`)) return;
 
     const previousSales = [...sales];
+    const previousFinance = [...financeEntries];
+
+    // Remove lançamentos pendentes vinculados junto com a oportunidade, evitando um vínculo órfão.
+    if (linkedFinance.length) {
+      financeEntries = financeEntries.filter((entry) => entry.saleId !== sale.id);
+      if (!saveFinanceEntries()) {
+        financeEntries = previousFinance;
+        return;
+      }
+    }
+
     sales = sales.filter((item) => item.id !== sale.id);
     if (!saveSales()) {
       sales = previousSales;
+      if (linkedFinance.length) {
+        financeEntries = previousFinance;
+        saveFinanceEntries();
+      }
       return;
     }
     renderSales();
+    if (linkedFinance.length) renderFinance();
   }
 });
 
