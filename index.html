@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="orcamentos.css?v=20261015-2">
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
   <link rel="stylesheet" href="producao.css?v=20261015-2">
-  <link rel="stylesheet" href="financeiro.css?v=20261015-2">
+  <link rel="stylesheet" href="financeiro.css?v=20261016-views1">
   <link rel="stylesheet" href="marketing.css?v=20261015-1">
   <script type="module" src="firebase-auth.js?v=10"></script>
   <script type="module" src="idle-lock.js?v=2"></script>
@@ -726,6 +726,15 @@
             <button type="submit" class="button button-primary">Salvar lançamento</button>
           </div>
         </form>
+
+        <div class="finance-view-tabs" role="tablist" aria-label="Visualizações do financeiro">
+          <button type="button" class="finance-view-tab active" role="tab" aria-selected="true" data-finance-view="overview">Visão geral</button>
+          <button type="button" class="finance-view-tab" role="tab" aria-selected="false" data-finance-view="receivable">Contas a receber</button>
+          <button type="button" class="finance-view-tab" role="tab" aria-selected="false" data-finance-view="payable">Contas a pagar</button>
+          <button type="button" class="finance-view-tab" role="tab" aria-selected="false" data-finance-view="team">Equipe</button>
+          <button type="button" class="finance-view-tab" role="tab" aria-selected="false" data-finance-view="commissions">Comissões</button>
+        </div>
+        <p id="financeViewHelp" class="finance-view-help">Todos os lançamentos do mês, sem duplicar registros.</p>
 
         <div class="content-card finance-list-card">
           <div class="list-toolbar">
