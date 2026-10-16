@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="style.css?v=20261016-dashboard1">
   <link rel="stylesheet" href="orcamentos.css?v=20261015-2">
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
-  <link rel="stylesheet" href="producao.css?v=20261015-2">
+  <link rel="stylesheet" href="producao.css?v=20261016-production2">
   <link rel="stylesheet" href="financeiro.css?v=20261016-views1">
   <link rel="stylesheet" href="marketing.css?v=20261015-1">
   <script type="module" src="firebase-auth.js?v=10"></script>
@@ -549,6 +549,14 @@
             <span>Prontos para entrega</span>
             <strong id="productionReadyCount">0</strong>
           </article>
+          <article class="production-summary-card production-summary-alert">
+            <span>Produções atrasadas</span>
+            <strong id="productionOverdueCount">0</strong>
+          </article>
+          <article class="production-summary-card production-summary-success">
+            <span>Entregues neste mês</span>
+            <strong id="productionDeliveredMonthCount">0</strong>
+          </article>
         </div>
 
         <form id="productionForm" class="content-card production-form" hidden>
@@ -624,6 +632,16 @@
             </div>
             <div class="production-toolbar-actions">
               <input id="productionSearch" class="search-input" placeholder="Buscar projeto ou cliente..." aria-label="Buscar projetos de produção">
+              <select id="productionStatusFilter" class="production-status-filter" aria-label="Filtrar projetos por status">
+                <option value="all">Todos os status</option>
+                <option value="pending">Aguardando início</option>
+                <option value="production">Em produção</option>
+                <option value="finishing">Acabamento / revisão</option>
+                <option value="ready">Pronto para entrega</option>
+                <option value="delivered">Entregue ao cliente</option>
+                <option value="paused">Pausado</option>
+                <option value="overdue">Somente atrasados</option>
+              </select>
               <div class="production-view-switch" role="group" aria-label="Visualização dos projetos">
                 <button type="button" class="button button-outline active" id="productionListViewBtn" aria-pressed="true">Lista</button>
                 <button type="button" class="button button-outline" id="productionCalendarViewBtn" aria-pressed="false">Calendário</button>
