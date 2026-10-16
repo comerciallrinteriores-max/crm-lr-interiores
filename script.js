@@ -2344,12 +2344,6 @@ $("#financeList").addEventListener("click", (event) => {
     return;
   }
   if (action === "delete") {
-    const hasPayments = entry.status === "paid" || Number(entry.paidAmount) > 0 ||
-      (Array.isArray(entry.payments) && entry.payments.some((payment) => Number(payment.amount) > 0));
-    if (hasPayments) {
-      alert("Não é possível excluir um lançamento com pagamento/recebimento registrado. Para preservar o histórico financeiro, mantenha o lançamento e ajuste o status se necessário.");
-      return;
-    }
     if (entry.saleId) {
       alert("Este lançamento foi gerado para uma oportunidade do Funil. Para removê-lo, vá ao Funil e exclua a oportunidade vinculada. O CRM removerá junto apenas este lançamento se ele estiver pendente e sem pagamentos; se houver recebimentos ou projeto na Produção, a exclusão será bloqueada para preservar o histórico.");
       return;
@@ -2358,7 +2352,12 @@ $("#financeList").addEventListener("click", (event) => {
       alert("Este lançamento está vinculado a uma comissão. Acesse Parceiros / Comissões e resolva o vínculo por lá. Se a comissão não aparecer, pode ser um vínculo antigo sem registro correspondente; não exclua o lançamento manualmente antes de conferir o histórico.");
       return;
     }
-    if (!confirm(`Deseja realmente excluir o lançamento "${entry.description}"?`)) return;
+    const hasPayments = entry.status === "paid" || Number(entry.paidAmount) > 0 ||
+      (Array.isArray(entry.payments) && entry.payments.some((payment) => Number(payment.amount) > 0));
+    const confirmMessage = hasPayments
+      ? `ATENÇÃO: este lançamento possui pagamento/recebimento registrado. Como o CRM está em fase de testes, ele será excluído mesmo assim. Deseja continuar excluindo "${entry.description}"?`
+      : `Deseja realmente excluir o lançamento "${entry.description}"?`;
+    if (!confirm(confirmMessage)) return;
     const previousEntries = [...financeEntries];
     financeEntries = financeEntries.filter((item) => item.id !== entry.id);
     if (!saveFinanceEntries()) {
