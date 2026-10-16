@@ -2,7 +2,7 @@ import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/13.0.
 import { getEncryptionState, initializeCloudData, lockCloudData, changeEncryptionPassword, createEncryptedBackup, restoreEncryptedBackup } from "./firebase-data.js?v=6";
 import {
   getAuth, setPersistence, browserLocalPersistence, signInWithEmailAndPassword,
-  onAuthStateChanged, signOut
+  sendPasswordResetEmail, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -24,6 +24,7 @@ const loginForm = document.getElementById("loginForm");
 const loginEmail = document.getElementById("loginEmail");
 const loginPassword = document.getElementById("loginPassword");
 const loginButton = document.getElementById("loginButton");
+const forgotPasswordButton = document.getElementById("forgotPasswordButton");
 const loginMessage = document.getElementById("loginMessage");
 const encryptionForm = document.getElementById("encryptionForm");
 const encryptionTitle = document.getElementById("encryptionTitle");
@@ -166,6 +167,41 @@ loginForm.addEventListener("submit", async (event) => {
       "auth/user-disabled": "Esta conta está desativada."
     };
     showLogin(messages[error.code] || "Não foi possível entrar. Confira o e-mail e a senha e tente novamente.");
+  }
+});
+
+forgotPasswordButton.addEventListener("click", async () => {
+  const email = loginEmail.value.trim();
+  loginMessage.style.color = "#a33131";
+  loginMessage.textContent = "";
+
+  if (!email) {
+    loginMessage.textContent = "Digite seu e-mail acima para receber o link de recuperação.";
+    loginEmail.focus();
+    return;
+  }
+  if (!loginEmail.checkValidity()) {
+    loginEmail.reportValidity();
+    return;
+  }
+
+  forgotPasswordButton.disabled = true;
+  forgotPasswordButton.textContent = "Enviando link…";
+  try {
+    await sendPasswordResetEmail(auth, email);
+    loginMessage.style.color = "#527064";
+    loginMessage.textContent = "Se houver uma conta cadastrada com esse e-mail, você receberá um link para redefinir a senha. Confira também o spam.";
+  } catch (error) {
+    console.error("Falha ao solicitar recuperação de senha:", error.code || error.message);
+    const messages = {
+      "auth/invalid-email": "Digite um endereço de e-mail válido.",
+      "auth/too-many-requests": "Muitas tentativas. Aguarde um pouco e tente novamente.",
+      "auth/network-request-failed": "Falha de conexão. Verifique sua internet e tente novamente."
+    };
+    loginMessage.textContent = messages[error.code] || "Não foi possível solicitar a recuperação agora. Tente novamente mais tarde.";
+  } finally {
+    forgotPasswordButton.disabled = false;
+    forgotPasswordButton.textContent = "Esqueci minha senha";
   }
 });
 
