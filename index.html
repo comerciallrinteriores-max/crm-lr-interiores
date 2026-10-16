@@ -831,7 +831,7 @@
           <button class="button button-primary" id="newTeamMemberBtn">+ Nova pessoa</button>
         </div>
         <div class="team-notice"><strong>Como funciona o recebimento</strong>
-          <p>No modo diário, informe os dias trabalhados ao registrar cada pagamento. O CRM calcula a diária multiplicada pelos dias. No modo mensal, o pagamento usa o valor fixo cadastrado. Todo pagamento registrado entra no Financeiro como despesa paga de mão de obra.</p>
+          <p>No modo diário, informe os dias trabalhados ao registrar cada pagamento. O CRM calcula a diária multiplicada pelos dias. No modo mensal, o pagamento usa o valor fixo mensal. Em “Outro”, o valor cadastrado será usado em cada pagamento, sem pedir dias. Todo pagamento entra no Financeiro como despesa paga de mão de obra.</p>
         </div>
         <form id="teamForm" class="content-card team-form" hidden>
           <div class="form-heading"><div><h2 id="teamFormTitle">Nova pessoa da equipe</h2><p>Preencha os dados de cadastro e recebimento.</p></div>
@@ -841,7 +841,7 @@
           <div class="form-grid">
             <label>Nome completo *<input id="teamMemberName" required maxlength="150" placeholder="Nome da pessoa"></label>
             <label>Função *<input id="teamMemberRole" required maxlength="100" placeholder="Ex.: Montador, ajudante, instalador"></label>
-            <label>Modo de recebimento *<select id="teamPaymentMode" required><option value="Diário">Diário</option><option value="Mensal">Mensal</option></select></label>
+            <label>Modo de recebimento *<select id="teamPaymentMode" required><option value="Diário">Diário</option><option value="Mensal">Mensal</option><option value="Outro">Outro</option></select></label>
             <label><span id="teamAmountLabel">Valor da diária (R$) *</span><input id="teamAmount" type="number" min="0.01" max="100000000" step="0.01" required placeholder="Ex.: 150,00 por dia"></label>
           </div>
           <p class="team-form-hint" id="teamPaymentHint">Informe quanto a pessoa recebe por dia trabalhado.</p>
