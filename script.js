@@ -263,16 +263,69 @@ $("#clientForm").addEventListener("submit", (event) => {
     return;
   }
 
+  let linkedRecordsSynced = true;
+  if (existingClient && existingClient.name !== clientData.name) {
+    linkedRecordsSynced = syncClientNameAcrossRecords(clientData);
+  }
+
   closeClientForm();
   renderClients($("#clientSearch").value);
   renderDashboard();
+  renderQuotes();
+  renderSales();
+  renderProduction();
+  renderFinance();
+
+  if (!linkedRecordsSynced) {
+    alert("O cadastro do cliente foi salvo, mas não foi possível atualizar todos os registros vinculados. Confira Orçamentos, Funil, Produção e Financeiro antes de continuar.");
+    return;
+  }
 
   alert(
     id
-      ? "Cliente atualizado com sucesso!"
+      ? (existingClient && existingClient.name !== clientData.name
+          ? "Cliente atualizado! O nome também foi sincronizado nos registros vinculados."
+          : "Cliente atualizado com sucesso!")
       : "Cliente cadastrado com sucesso!"
   );
 });
+
+function syncClientNameAcrossRecords(client) {
+  const previousQuotes = [...quotes];
+  const previousSales = [...sales];
+  const previousProduction = [...productionOrders];
+  const previousFinance = [...financeEntries];
+
+  quotes = quotes.map((item) => item.clientId === client.id
+    ? { ...item, clientName: client.name, updatedAt: new Date().toISOString() }
+    : item
+  );
+  sales = sales.map((item) => item.clientId === client.id
+    ? { ...item, clientName: client.name, updatedAt: new Date().toISOString() }
+    : item
+  );
+  productionOrders = productionOrders.map((item) => item.clientId === client.id
+    ? { ...item, clientName: client.name, updatedAt: new Date().toISOString() }
+    : item
+  );
+  financeEntries = financeEntries.map((item) => item.clientId === client.id
+    ? { ...item, clientName: client.name, updatedAt: new Date().toISOString() }
+    : item
+  );
+
+  const saved = saveQuotes() && saveSales() && saveProductionOrders() && saveFinanceEntries();
+  if (saved) return true;
+
+  quotes = previousQuotes;
+  sales = previousSales;
+  productionOrders = previousProduction;
+  financeEntries = previousFinance;
+  saveQuotes();
+  saveSales();
+  saveProductionOrders();
+  saveFinanceEntries();
+  return false;
+}
 
 function createId() {
   if (
