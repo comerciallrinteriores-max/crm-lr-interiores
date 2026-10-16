@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#173d32">
   <title>CRM | LR Interiores</title>
-  <link rel="stylesheet" href="style.css?v=20261015-2">
+  <link rel="stylesheet" href="style.css?v=20261016-1">
   <link rel="stylesheet" href="orcamentos.css?v=20261015-2">
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
   <link rel="stylesheet" href="producao.css?v=20261015-2">
   <link rel="stylesheet" href="financeiro.css?v=20261015-2">
   <link rel="stylesheet" href="marketing.css?v=20261015-1">
-  <script type="module" src="firebase-auth.js?v=7"></script>
+  <script type="module" src="firebase-auth.js?v=8"></script>
   <script type="module" src="idle-lock.js?v=2"></script>
   <style>[hidden] { display: none !important; }</style>
 </head>
@@ -66,6 +66,7 @@
         <button class="nav-item" data-page="producao">⚒ <span>Produção e entregas</span></button>
         <button class="nav-item" data-page="financeiro">R$ <span>Financeiro</span></button>
         <button class="nav-item" data-page="marketing">◎ <span>Marketing</span></button>
+        <button class="nav-item" data-page="parceiros">♧ <span>Parceiros / Comissões</span></button>
       </nav>
       <div class="sidebar-bottom">
         <span class="status-dot"></span>
@@ -729,6 +730,100 @@
           <div id="financeList" class="finance-list"></div>
         </div>
       </section>
+
+      <section class="page" id="page-parceiros">
+        <div class="section-heading">
+          <div>
+            <h2>Parceiros e comissões</h2>
+            <p>Cadastre parceiros, vincule orçamentos existentes e acompanhe as comissões quando a venda for concluída.</p>
+          </div>
+          <div class="partners-heading-actions">
+            <button class="button button-outline" id="newCommissionBtn">+ Vincular orçamento</button>
+            <button class="button button-primary" id="newPartnerBtn">+ Novo parceiro</button>
+          </div>
+        </div>
+
+        <div class="partners-notice">
+          <strong>Regra de comissão</strong>
+          <p>Uma comissão por parceiro e orçamento. Marceneiro: 20%; Arquiteto: 10%; Outros: percentual definido no cadastro. A comissão só fica pendente quando a oportunidade vinculada estiver como “Venda concluída”.</p>
+        </div>
+
+        <div class="partners-summary-grid">
+          <article class="partners-summary-card"><span>Comissões aguardando fechamento</span><strong id="commissionAwaitingTotal">R$ 0,00</strong><small id="commissionAwaitingCount">0 vínculos</small></article>
+          <article class="partners-summary-card"><span>Comissões pendentes</span><strong id="commissionPendingTotal">R$ 0,00</strong><small id="commissionPendingCount">0 comissões</small></article>
+          <article class="partners-summary-card"><span>Comissões pagas</span><strong id="commissionPaidTotal">R$ 0,00</strong><small id="commissionPaidCount">0 comissões</small></article>
+        </div>
+
+        <form id="partnerForm" class="content-card partners-form" hidden>
+          <div class="form-heading">
+            <div><h2 id="partnerFormTitle">Novo parceiro</h2><p>O percentual sugerido é preenchido conforme a categoria e pode ser editado.</p></div>
+            <button type="button" class="button button-outline" id="cancelPartnerBtn">Cancelar</button>
+          </div>
+          <input type="hidden" id="partnerId">
+          <div class="form-grid">
+            <label>Nome do parceiro *
+              <input id="partnerName" required maxlength="150" placeholder="Nome completo ou empresa">
+            </label>
+            <label>Categoria *
+              <select id="partnerCategory" required>
+                <option value="Marceneiro">Marceneiro</option>
+                <option value="Arquiteto">Arquiteto</option>
+                <option value="Outros">Outros</option>
+              </select>
+            </label>
+            <label>Percentual padrão da comissão (%) *
+              <input id="partnerRate" type="number" min="0" max="100" step="0.01" required value="20">
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="button button-outline" id="cancelPartnerBtnBottom">Cancelar</button>
+            <button type="submit" class="button button-primary">Salvar parceiro</button>
+          </div>
+        </form>
+
+        <div class="content-card">
+          <div class="list-toolbar">
+            <div><h2>Parceiros cadastrados</h2><p id="partnerCount">0 parceiros</p></div>
+            <input id="partnerSearch" class="search-input" placeholder="Buscar parceiro..." aria-label="Buscar parceiro">
+          </div>
+          <div id="partnerList" class="partner-list"></div>
+        </div>
+
+        <form id="commissionForm" class="content-card partners-form" hidden>
+          <div class="form-heading">
+            <div><h2 id="commissionFormTitle">Vincular orçamento</h2><p>Selecione um parceiro e um orçamento já cadastrado. O vínculo não duplica o orçamento.</p></div>
+            <button type="button" class="button button-outline" id="cancelCommissionBtn">Cancelar</button>
+          </div>
+          <div class="form-grid">
+            <label>Parceiro *
+              <select id="commissionPartner" required><option value="">Selecione um parceiro</option></select>
+            </label>
+            <label>Orçamento existente *
+              <select id="commissionQuote" required><option value="">Selecione um orçamento</option></select>
+            </label>
+            <label>Percentual aplicado (%)
+              <input id="commissionRatePreview" type="number" min="0" max="100" step="0.01" readonly>
+            </label>
+            <label>Valor estimado da comissão
+              <input id="commissionAmountPreview" type="text" readonly value="R$ 0,00">
+            </label>
+          </div>
+          <p class="partners-form-note" id="commissionQuoteHint">O valor final será registrado quando a venda for concluída.</p>
+          <div class="form-actions">
+            <button type="button" class="button button-outline" id="cancelCommissionBtnBottom">Cancelar</button>
+            <button type="submit" class="button button-primary">Criar vínculo</button>
+          </div>
+        </form>
+
+        <div class="content-card">
+          <div class="list-toolbar">
+            <div><h2>Comissões por orçamento</h2><p id="commissionCount">Nenhuma comissão cadastrada</p></div>
+            <input id="commissionSearch" class="search-input" placeholder="Buscar parceiro, projeto ou cliente..." aria-label="Buscar comissões">
+          </div>
+          <div id="commissionList" class="commission-list"></div>
+        </div>
+      </section>
+
       <section class="page" id="page-marketing">
         <div class="section-heading marketing-heading">
           <div>
