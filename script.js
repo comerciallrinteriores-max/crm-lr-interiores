@@ -1743,19 +1743,31 @@ function renderProduction(searchTerm = $("#productionSearch").value) {
   renderDashboard();
   renderProductionOptions();
   const normalizedSearch = (searchTerm || "").trim().toLocaleLowerCase("pt-BR");
+  const selectedStatus = $("#productionStatusFilter")?.value || "all";
+  const today = localISODate();
+  const currentMonth = today.slice(0, 7);
+  const isOrderOverdue = (order) => Boolean(
+    order.deadline && order.deadline < today && order.status !== "delivered"
+  );
   const filtered = productionOrders.filter((order) => {
     const client = clients.find((item) => item.id === order.clientId);
     const clientName = client?.name || order.clientName || "";
-    return `${order.title} ${clientName} ${order.saleTitle} ${order.quoteName} ${order.notes}`
+    const matchesSearch = `${order.title} ${clientName} ${order.saleTitle} ${order.quoteName} ${order.notes}`
       .toLocaleLowerCase("pt-BR").includes(normalizedSearch);
+    const matchesStatus = selectedStatus === "all" ||
+      (selectedStatus === "overdue" ? isOrderOverdue(order) : order.status === selectedStatus);
+    return matchesSearch && matchesStatus;
   });
 
-  const activeOrders = productionOrders.filter((order) => !["delivered"].includes(order.status));
-  $("#productionActiveCount").textContent = activeOrders.length;
+  $("#productionActiveCount").textContent = productionOrders.filter((order) => order.status !== "delivered").length;
   $("#productionWorkingCount").textContent = productionOrders.filter((order) =>
     ["production", "finishing"].includes(order.status)
   ).length;
   $("#productionReadyCount").textContent = productionOrders.filter((order) => order.status === "ready").length;
+  $("#productionOverdueCount").textContent = productionOrders.filter(isOrderOverdue).length;
+  $("#productionDeliveredMonthCount").textContent = productionOrders.filter((order) =>
+    order.status === "delivered" && (order.deliveredDate || "").startsWith(currentMonth)
+  ).length;
   $("#productionListCount").textContent = `${filtered.length} ${filtered.length === 1 ? "projeto" : "projetos"}`;
 
   const list = $("#productionList");
@@ -1763,6 +1775,7 @@ function renderProduction(searchTerm = $("#productionSearch").value) {
     list.innerHTML = `<div class="list-empty">${productionOrders.length === 0
       ? "Você ainda não cadastrou projetos de produção. Clique em “+ Nova ordem” para começar."
       : "Nenhum projeto encontrado para essa busca."}</div>`;
+    renderProductionCalendar(filtered);
     return;
   }
 
@@ -1779,7 +1792,14 @@ function renderProduction(searchTerm = $("#productionSearch").value) {
     const statusInfo = productionStatuses.find((item) => item.id === order.status) || productionStatuses[0];
     const client = clients.find((item) => item.id === order.clientId);
     const clientName = client?.name || order.clientName || "Sem cliente vinculado";
-    const isOverdue = order.deadline && order.deadline < new Date().toISOString().slice(0, 10) && order.status !== "delivered";
+    const today = localISODate();
+    const isOverdue = order.deadline && order.deadline < today && order.status !== "delivered";
+    const isDueToday = order.deadline === today && order.status !== "delivered";
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const isDueSoon = order.deadline > today && order.deadline <= localISODate(nextWeek) && order.status !== "delivered";
+    const deadlineClass = isOverdue ? "production-overdue" : isDueToday ? "production-due-today" : isDueSoon ? "production-due-soon" : "";
+    const deadlineLabel = isOverdue ? " · Atrasado" : isDueToday ? " · Vence hoje" : isDueSoon ? " · Próximo" : "";
     const statusOptions = productionStatuses.map((status) =>
       `<option value="${status.id}" ${status.id === order.status ? "selected" : ""}>${escapeHTML(status.title)}</option>`
     ).join("");
@@ -1800,7 +1820,7 @@ function renderProduction(searchTerm = $("#productionSearch").value) {
           ${order.photo ? `<a class="production-order-photo-link" href="${order.photo}" target="_blank" rel="noopener" aria-label="Abrir foto do projeto ${escapeHTML(order.title)}"><img class="production-order-photo" src="${order.photo}" alt="Foto de referência de ${escapeHTML(order.title)}" loading="lazy"></a>` : ""}
           <div class="production-dates">
             ${order.startDate ? `<span><small>Início</small><strong>${escapeHTML(formatProductionDate(order.startDate))}</strong></span>` : ""}
-            ${order.deadline ? `<span class="${isOverdue ? "production-overdue" : ""}"><small>Prazo de entrega</small><strong>${escapeHTML(formatProductionDate(order.deadline))}${isOverdue ? " · Atrasado" : ""}</strong></span>` : ""}
+            ${order.deadline ? `<span class="${deadlineClass}"><small>Prazo de entrega</small><strong>${escapeHTML(formatProductionDate(order.deadline))}${deadlineLabel}</strong></span>` : ""}
             ${order.deliveredDate ? `<span><small>Entregue em</small><strong>${escapeHTML(formatProductionDate(order.deliveredDate))}</strong></span>` : ""}
           </div>
           ${order.notes ? `<p class="production-notes">${escapeHTML(order.notes)}</p>` : ""}
@@ -1947,6 +1967,7 @@ function updateProductionStatus(orderId, status) {
 }
 
 $("#productionSearch").addEventListener("input", (event) => renderProduction(event.target.value));
+$("#productionStatusFilter").addEventListener("change", () => renderProduction());
 
 $("#productionList").addEventListener("click", (event) => {
   const editButton = event.target.closest("[data-production-edit]");
