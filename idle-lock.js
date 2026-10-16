@@ -7,18 +7,18 @@ let user = null;
 let timer = null;
 const idleMs = 600000;
 
-function arm() {
+function arm(delay = idleMs) {
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
     if (!user || !auth.currentUser || auth.currentUser.uid !== user.uid || !crm || crm.hidden) return;
     if (!isCloudDataSafeToLock()) {
-      timer = setTimeout(arm, 60000);
+      arm(60000);
       return;
     }
     crm.hidden = true;
     lockCloudData();
     window.location.reload();
-  }, idleMs);
+  }, delay);
 }
 
 ["pointerdown", "pointermove", "keydown", "touchstart", "scroll"].forEach((name) => {
@@ -31,3 +31,11 @@ onAuthStateChanged(auth, (nextUser) => {
   user = nextUser || null;
   if (!user && timer) clearTimeout(timer);
 });
+
+if (crm) {
+  const observer = new MutationObserver(() => {
+    if (user && !crm.hidden) arm();
+    else if (timer) clearTimeout(timer);
+  });
+  observer.observe(crm, { attributes: true, attributeFilter: ["hidden"] });
+}
