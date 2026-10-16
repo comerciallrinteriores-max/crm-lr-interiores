@@ -2991,7 +2991,7 @@ function updateTeamPaymentPreview() {
   }
   if (member.paymentMode !== "Diário") {
     $("#teamPaymentCalculated").value = member.amount.toFixed(2);
-    $("#teamPaymentHint").textContent = member.paymentMode === "Mensal"
+    $("#teamPaymentCalculationHint").textContent = member.paymentMode === "Mensal"
       ? `Pagamento mensal de ${formatBRL(member.amount)} para ${member.name}.`
       : `Pagamento de ${formatBRL(member.amount)} para ${member.name}, conforme o modo “Outro”.`;
     return;
@@ -2999,12 +2999,12 @@ function updateTeamPaymentPreview() {
   const days = Number($("#teamPaymentDays").value);
   if (!Number.isInteger(days) || days < 1 || days > 366) {
     $("#teamPaymentCalculated").value = "";
-    $("#teamPaymentHint").textContent = `Valor da diária: ${formatBRL(member.amount)}. Informe de 1 a 366 dias trabalhados.`;
+    $("#teamPaymentCalculationHint").textContent = `Valor da diária: ${formatBRL(member.amount)}. Informe de 1 a 366 dias trabalhados.`;
     return;
   }
   const total = Math.round(member.amount * days * 100) / 100;
   $("#teamPaymentCalculated").value = total.toFixed(2);
-  $("#teamPaymentHint").textContent = `${days} dia(s) × ${formatBRL(member.amount)} = ${formatBRL(total)}.`;
+  $("#teamPaymentCalculationHint").textContent = `${days} dia(s) × ${formatBRL(member.amount)} = ${formatBRL(total)}.`;
 }
 
 function openTeamPaymentForm(member) {
