@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#173d32">
   <title>CRM | LR Interiores</title>
-  <link rel="stylesheet" href="style.css?v=20261016-menu1">
+  <link rel="stylesheet" href="style.css?v=20261016-dashboard1">
   <link rel="stylesheet" href="orcamentos.css?v=20261015-2">
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
   <link rel="stylesheet" href="producao.css?v=20261015-2">
@@ -136,6 +136,32 @@
             <span class="stat-label">Recebido neste mês</span>
             <strong id="dashboardReceivedMonth">R$ 0,00</strong>
             <small>Valores registrados como recebidos</small>
+          </article>
+        </div>
+        <div class="dashboard-metrics-grid" aria-label="Indicadores de atenção">
+          <article class="stat-card dashboard-metric-card">
+            <span class="stat-icon">↗</span>
+            <span class="stat-label">Valor em vendas abertas</span>
+            <strong id="dashboardPipelineValue">R$ 0,00</strong>
+            <small>Oportunidades ainda não concluídas</small>
+          </article>
+          <article class="stat-card dashboard-metric-card">
+            <span class="stat-icon">↓</span>
+            <span class="stat-label">A receber</span>
+            <strong id="dashboardReceivableValue">R$ 0,00</strong>
+            <small>Saldo pendente dos clientes</small>
+          </article>
+          <article class="stat-card dashboard-metric-card">
+            <span class="stat-icon">↑</span>
+            <span class="stat-label">Contas a pagar</span>
+            <strong id="dashboardPayableValue">R$ 0,00</strong>
+            <small>Despesas ainda pendentes</small>
+          </article>
+          <article class="stat-card dashboard-metric-card">
+            <span class="stat-icon">⚒</span>
+            <span class="stat-label">Produções atrasadas</span>
+            <strong id="dashboardOverdueProduction">0</strong>
+            <small>Pedidos com prazo vencido</small>
           </article>
         </div>
         <div class="content-card">
