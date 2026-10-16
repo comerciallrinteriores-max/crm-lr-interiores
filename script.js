@@ -1291,6 +1291,8 @@ $("#saleForm").addEventListener("submit", (event) => {
     const financeSynced = syncWonSalesToFinance();
     if (!financeSynced) {
       alert("A venda foi salva, mas não foi possível atualizar o Financeiro agora. Abra a área Financeiro para tentar sincronizar novamente.");
+    } else if (financeSyncProtectedReceivedAmount) {
+      alert("O lançamento do Financeiro foi atualizado, mas o valor total não ficou abaixo dos recebimentos já registrados. Confira o valor da venda e o histórico de pagamentos.");
     } else if (newlyWon) {
       alert("Venda concluída! O lançamento correspondente foi conferido no Financeiro. Confira o vencimento e registre os recebimentos conforme o cliente pagar.");
     }
@@ -1318,7 +1320,14 @@ function moveSaleToStage(saleId, stageId) {
     sales = previousSales;
     return;
   }
-  if (stageId === "won") syncWonSalesToFinance();
+  if (stageId === "won") {
+    const financeSynced = syncWonSalesToFinance();
+    if (!financeSynced) {
+      alert("A etapa foi salva, mas não foi possível atualizar o Financeiro agora. Abra a área Financeiro para tentar sincronizar novamente.");
+    } else if (financeSyncProtectedReceivedAmount) {
+      alert("O lançamento do Financeiro foi atualizado, mas o valor total foi mantido no mínimo dos recebimentos já registrados. Confira o valor da venda e o histórico de pagamentos.");
+    }
+  }
   renderSales();
 }
 
@@ -2193,20 +2202,54 @@ function closeFinanceForm() {
   $("#financeLinkedSaleInfo").hidden = true;
 }
 
-function syncWonSalesToFinance() {
-  const linkedSaleIds = new Set(financeEntries.map((entry) => entry.saleId).filter(Boolean));
-  const eligibleSales = sales.filter((sale) =>
-    sale.stage === "won" &&
-    !linkedSaleIds.has(sale.id) &&
-    Number(sale.expectedValue) > 0
-  );
-  if (!eligibleSales.length) return true;
+let financeSyncProtectedReceivedAmount = false;
 
+function syncWonSalesToFinance() {
+  financeSyncProtectedReceivedAmount = false;
   const previousEntries = [...financeEntries];
   const today = localISODate();
-  const imported = eligibleSales.map((sale) => {
+  const linkedSaleIds = new Set(financeEntries.map((entry) => entry.saleId).filter(Boolean));
+  const wonSales = sales.filter((sale) =>
+    sale.stage === "won" && Number(sale.expectedValue) > 0
+  );
+  const newEntries = [];
+
+  for (const sale of wonSales) {
     const client = clients.find((item) => item.id === sale.clientId);
-    return {
+    const existing = financeEntries.find((entry) => entry.saleId === sale.id);
+
+    if (existing) {
+      const payments = Array.isArray(existing.payments) ? existing.payments : [];
+      const receivedTotal = Math.round(payments.reduce((sum, payment) =>
+        sum + Math.max(0, Number(payment.amount) || 0), 0) * 100) / 100;
+      let amount = Math.round(Math.max(0, Number(sale.expectedValue) || 0) * 100) / 100;
+      if (amount < receivedTotal) {
+        amount = receivedTotal;
+        financeSyncProtectedReceivedAmount = true;
+      }
+      const paidAmount = Math.min(amount, receivedTotal);
+      const status = paidAmount >= amount && amount > 0
+        ? "paid"
+        : paidAmount > 0 ? "partial" : "pending";
+      const updated = {
+        ...existing,
+        type: "income",
+        description: sale.title,
+        amount,
+        paidAmount,
+        payments,
+        status,
+        paidDate: payments.length ? payments[payments.length - 1].date : "",
+        clientId: sale.clientId || "",
+        clientName: client ? client.name : (sale.clientName || ""),
+        updatedAt: new Date().toISOString()
+      };
+      financeEntries = financeEntries.map((entry) => entry.id === existing.id ? updated : entry);
+      continue;
+    }
+
+    if (linkedSaleIds.has(sale.id)) continue;
+    newEntries.push({
       id: createId(),
       saleId: sale.id,
       type: "income",
@@ -2214,6 +2257,7 @@ function syncWonSalesToFinance() {
       category: "Venda / serviço",
       amount: Math.round(Math.max(0, Number(sale.expectedValue) || 0) * 100) / 100,
       paidAmount: 0,
+      payments: [],
       dueDate: today,
       status: "pending",
       paidDate: "",
@@ -2222,9 +2266,15 @@ function syncWonSalesToFinance() {
       notes: "Criado automaticamente ao concluir a venda no Funil. Atualize o valor recebido conforme o cliente realizar os pagamentos.",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    };
-  });
-  financeEntries = [...imported, ...financeEntries];
+    });
+    linkedSaleIds.add(sale.id);
+  }
+
+  if (!newEntries.length && JSON.stringify(previousEntries) === JSON.stringify(financeEntries)) {
+    return true;
+  }
+
+  financeEntries = [...newEntries, ...financeEntries];
   if (!saveFinanceEntries()) {
     financeEntries = previousEntries;
     return false;
