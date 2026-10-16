@@ -988,3 +988,11 @@ textarea {
   .dashboard-metric-card .stat-label { font-size: 10px; }
   .dashboard-metric-card small { font-size: 9px; }
 }
+
+
+/* Destaque visual dos próximos contatos no funil de vendas */
+.sales-followup-detail > span { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sales-followup-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 8px; font-size: 0.72rem; font-weight: 700; line-height: 1.3; background: var(--green-light); color: var(--green); }
+.sales-followup-overdue .sales-followup-badge { background: #fbe9e7; color: #a12f2f; }
+.sales-followup-today .sales-followup-badge { background: var(--gold-light); color: #805b18; }
+.sales-followup-upcoming .sales-followup-badge { background: var(--green-light); color: var(--green); }
