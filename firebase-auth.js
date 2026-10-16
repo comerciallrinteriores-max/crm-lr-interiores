@@ -120,7 +120,7 @@ async function loadCRMWithEncryption(user, password, confirmation) {
     encryptionScreen.hidden = true;
     appLoading.hidden = false;
     if (!crmLoaded) {
-      await import("./script.js?v=20261016-10");
+      await import("./script.js?v=20261016-finviews1");
       crmLoaded = true;
       loadedUid = user.uid;
     }
