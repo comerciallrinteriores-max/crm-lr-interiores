@@ -917,3 +917,25 @@ textarea {
   .partner-actions { width: 100%; justify-content: flex-end; padding-top: 8px; border-top: 1px solid var(--border); }
   .commission-values { gap: 12px 20px; }
 }
+
+/* ---------- Cadastro de equipe ---------- */
+.team-notice { margin: 0 0 20px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.team-notice strong { display: block; margin-bottom: 5px; color: var(--green); }
+.team-notice p { margin: 0; color: var(--muted); line-height: 1.6; }
+.team-form { margin-bottom: 22px; }
+.team-form-hint { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.team-list { display: grid; gap: 10px; }
+.team-row { display: flex; align-items: center; gap: 14px; padding: 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.team-avatar { display: flex; flex: 0 0 42px; width: 42px; height: 42px; align-items: center; justify-content: center; border-radius: 50%; background: var(--green-light); color: var(--green); font-weight: 700; }
+.team-info { display: grid; flex: 1; min-width: 0; gap: 3px; }
+.team-info strong { color: var(--text); overflow-wrap: anywhere; }
+.team-info span { color: var(--muted); }
+.team-info small { color: var(--green); font-weight: 600; }
+.team-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.button-danger { border: 1px solid #e6c7c7; background: #fff; color: var(--danger); }
+.button-danger:hover { background: #fff5f5; }
+@media (max-width: 560px) {
+  .team-row { align-items: flex-start; flex-wrap: wrap; }
+  .team-info { width: calc(100% - 60px); flex: 1 1 calc(100% - 60px); }
+  .team-actions { width: 100%; justify-content: flex-end; padding-top: 8px; border-top: 1px solid var(--border); }
+}
