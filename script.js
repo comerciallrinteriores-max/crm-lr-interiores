@@ -3075,7 +3075,7 @@ $("#teamPaymentForm").addEventListener("submit", (event) => {
   const paymentDate = $("#teamPaymentDate").value;
   const isDaily = member.paymentMode === "Diário";
   const days = isDaily ? Number($("#teamPaymentDays").value) : null;
-  if (!paymentDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(paymentDate)) {
+  if (!paymentDate || !/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
     alert("Informe uma data válida para o pagamento.");
     $("#teamPaymentDate").focus();
     return;
