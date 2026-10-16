@@ -2922,7 +2922,7 @@ function loadTeamMembers() {
         ...item,
         name: item.name.trim(),
         role: typeof item.role === "string" ? item.role : "",
-        paymentMode: item.paymentMode === "Mensal" ? "Mensal" : "Diário",
+        paymentMode: ["Diário", "Mensal", "Outro"].includes(item.paymentMode) ? item.paymentMode : "Diário",
         amount: Math.max(0, Number(item.amount) || 0),
         createdAt: item.createdAt || new Date().toISOString(),
         updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
@@ -2945,12 +2945,15 @@ function saveTeamMembers() {
 }
 
 function updateTeamPaymentFields() {
-  const isDaily = $("#teamPaymentMode").value === "Diário";
-  $("#teamAmountLabel").textContent = isDaily ? "Valor da diária (R$) *" : "Valor mensal (R$) *";
-  $("#teamAmount").placeholder = isDaily ? "Ex.: 150,00 por dia" : "Ex.: 2.500,00 por mês";
+  const mode = $("#teamPaymentMode").value;
+  const isDaily = mode === "Diário";
+  $("#teamAmountLabel").textContent = isDaily ? "Valor da diária (R$) *" : mode === "Mensal" ? "Valor mensal (R$) *" : "Valor por pagamento (R$) *";
+  $("#teamAmount").placeholder = isDaily ? "Ex.: 150,00 por dia" : mode === "Mensal" ? "Ex.: 2.500,00 por mês" : "Ex.: 300,00 por pagamento";
   $("#teamPaymentHint").textContent = isDaily
     ? "Informe o valor de um dia trabalhado. A quantidade de dias será preenchida ao registrar cada pagamento no Financeiro."
-    : "Informe o valor fixo mensal. No pagamento mensal, o CRM não solicitará a quantidade de dias.";
+    : mode === "Mensal"
+      ? "Informe o valor fixo mensal. No pagamento mensal, o CRM não solicitará a quantidade de dias."
+      : "Informe o valor padrão de cada pagamento. Não será necessário informar a quantidade de dias.";
 }
 
 function openTeamMemberForm(member = null) {
@@ -2986,9 +2989,11 @@ function updateTeamPaymentPreview() {
     $("#teamPaymentCalculated").value = "";
     return;
   }
-  if (member.paymentMode === "Mensal") {
+  if (member.paymentMode !== "Diário") {
     $("#teamPaymentCalculated").value = member.amount.toFixed(2);
-    $("#teamPaymentHint").textContent = `Pagamento mensal de ${formatBRL(member.amount)} para ${member.name}.`;
+    $("#teamPaymentHint").textContent = member.paymentMode === "Mensal"
+      ? `Pagamento mensal de ${formatBRL(member.amount)} para ${member.name}.`
+      : `Pagamento de ${formatBRL(member.amount)} para ${member.name}, conforme o modo “Outro”.`;
     return;
   }
   const days = Number($("#teamPaymentDays").value);
@@ -3132,7 +3137,7 @@ $("#teamForm").addEventListener("submit", (event) => {
   const role = $("#teamMemberRole").value.trim();
   const paymentMode = $("#teamPaymentMode").value;
   const amount = Number($("#teamAmount").value);
-  if (!name || !role || !["Diário", "Mensal"].includes(paymentMode) || !Number.isFinite(amount) || amount <= 0) {
+  if (!name || !role || !["Diário", "Mensal", "Outro"].includes(paymentMode) || !Number.isFinite(amount) || amount <= 0) {
     alert("Preencha o nome, a função, o modo de recebimento e um valor maior que zero.");
     return;
   }
