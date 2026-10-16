@@ -618,10 +618,19 @@ function renderDashboardFollowups() {
   const horizonDate = new Date();
   horizonDate.setDate(horizonDate.getDate() + 7);
   const horizon = localISODate(horizonDate);
-  const dueSales = sales
+  const allDueSales = sales
     .filter((sale) => !["won", "lost"].includes(sale.stage) && sale.followupDate && sale.followupDate <= horizon)
-    .sort((a, b) => a.followupDate.localeCompare(b.followupDate))
-    .slice(0, 5);
+    .sort((a, b) => a.followupDate.localeCompare(b.followupDate));
+  const overdueCount = allDueSales.filter((sale) => sale.followupDate < today).length;
+  const todayCount = allDueSales.filter((sale) => sale.followupDate === today).length;
+  const upcomingCount = allDueSales.filter((sale) => sale.followupDate > today).length;
+  const summary = $("#dashboardFollowupSummary");
+  if (summary) {
+    summary.textContent = allDueSales.length
+      ? `${overdueCount} vencido(s) • ${todayCount} para hoje • ${upcomingCount} nos próximos 7 dias`
+      : "Nenhum retorno vencido ou previsto para os próximos 7 dias";
+  }
+  const dueSales = allDueSales.slice(0, 5);
 
   if (!dueSales.length) {
     container.innerHTML = '<div class="dashboard-alert-empty">Nenhum retorno vencido ou previsto para os próximos 7 dias.</div>';
