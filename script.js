@@ -111,6 +111,7 @@ const pageNames = {
   orcamentos: "Orçamentos e custos",
   vendas: "Funil de vendas",
   producao: "Produção e entregas",
+  equipe: "Equipe",
   financeiro: "Financeiro",
   marketing: "Marketing",
   parceiros: "Parceiros / Comissões"
@@ -146,6 +147,7 @@ function navigateTo(pageName) {
   if (pageName === "orcamentos") renderQuotes();
   if (pageName === "vendas") renderSales();
   if (pageName === "producao") renderProduction();
+  if (pageName === "equipe") renderTeamMembers();
   if (pageName === "financeiro") renderFinance();
   if (pageName === "marketing") renderMarketing();
   if (pageName === "parceiros") renderPartners();
@@ -261,16 +263,69 @@ $("#clientForm").addEventListener("submit", (event) => {
     return;
   }
 
+  let linkedRecordsSynced = true;
+  if (existingClient && existingClient.name !== clientData.name) {
+    linkedRecordsSynced = syncClientNameAcrossRecords(clientData);
+  }
+
   closeClientForm();
   renderClients($("#clientSearch").value);
   renderDashboard();
+  renderQuotes();
+  renderSales();
+  renderProduction();
+  renderFinance();
+
+  if (!linkedRecordsSynced) {
+    alert("O cadastro do cliente foi salvo, mas não foi possível atualizar todos os registros vinculados. Confira Orçamentos, Funil, Produção e Financeiro antes de continuar.");
+    return;
+  }
 
   alert(
     id
-      ? "Cliente atualizado com sucesso!"
+      ? (existingClient && existingClient.name !== clientData.name
+          ? "Cliente atualizado! O nome também foi sincronizado nos registros vinculados."
+          : "Cliente atualizado com sucesso!")
       : "Cliente cadastrado com sucesso!"
   );
 });
+
+function syncClientNameAcrossRecords(client) {
+  const previousQuotes = [...quotes];
+  const previousSales = [...sales];
+  const previousProduction = [...productionOrders];
+  const previousFinance = [...financeEntries];
+
+  quotes = quotes.map((item) => item.clientId === client.id
+    ? { ...item, clientName: client.name, updatedAt: new Date().toISOString() }
+    : item
+  );
+  sales = sales.map((item) => item.clientId === client.id
+    ? { ...item, clientName: client.name, updatedAt: new Date().toISOString() }
+    : item
+  );
+  productionOrders = productionOrders.map((item) => item.clientId === client.id
+    ? { ...item, clientName: client.name, updatedAt: new Date().toISOString() }
+    : item
+  );
+  financeEntries = financeEntries.map((item) => item.clientId === client.id
+    ? { ...item, clientName: client.name, updatedAt: new Date().toISOString() }
+    : item
+  );
+
+  const saved = saveQuotes() && saveSales() && saveProductionOrders() && saveFinanceEntries();
+  if (saved) return true;
+
+  quotes = previousQuotes;
+  sales = previousSales;
+  productionOrders = previousProduction;
+  financeEntries = previousFinance;
+  saveQuotes();
+  saveSales();
+  saveProductionOrders();
+  saveFinanceEntries();
+  return false;
+}
 
 function createId() {
   if (
@@ -474,6 +529,22 @@ function renderDashboard() {
   $("#dashboardOpenSales").textContent = openSales.length;
   $("#dashboardReceivedMonth").textContent = formatBRL(receivedThisMonth);
 
+  const pipelineValue = openSales.reduce((sum, sale) => sum + Math.max(0, Number(sale.expectedValue) || 0), 0);
+  const receivableValue = financeEntries.reduce((sum, entry) => sum + financeOutstandingAmount(entry), 0);
+  const payableValue = financeEntries.reduce((sum, entry) => {
+    if (entry.type !== "expense" || entry.status === "paid") return sum;
+    return sum + Math.max(0, (Number(entry.amount) || 0) - (Number(entry.paidAmount) || 0));
+  }, 0);
+  const today = localISODate();
+  const overdueProduction = productionOrders.filter((order) =>
+    order.status !== "delivered" && order.deadline && order.deadline < today
+  ).length;
+
+  $("#dashboardPipelineValue").textContent = formatBRL(pipelineValue);
+  $("#dashboardReceivableValue").textContent = formatBRL(receivableValue);
+  $("#dashboardPayableValue").textContent = formatBRL(payableValue);
+  $("#dashboardOverdueProduction").textContent = overdueProduction;
+
   renderDashboardFollowups();
   renderDashboardDeadlines();
 
@@ -547,10 +618,19 @@ function renderDashboardFollowups() {
   const horizonDate = new Date();
   horizonDate.setDate(horizonDate.getDate() + 7);
   const horizon = localISODate(horizonDate);
-  const dueSales = sales
+  const allDueSales = sales
     .filter((sale) => !["won", "lost"].includes(sale.stage) && sale.followupDate && sale.followupDate <= horizon)
-    .sort((a, b) => a.followupDate.localeCompare(b.followupDate))
-    .slice(0, 5);
+    .sort((a, b) => a.followupDate.localeCompare(b.followupDate));
+  const overdueCount = allDueSales.filter((sale) => sale.followupDate < today).length;
+  const todayCount = allDueSales.filter((sale) => sale.followupDate === today).length;
+  const upcomingCount = allDueSales.filter((sale) => sale.followupDate > today).length;
+  const summary = $("#dashboardFollowupSummary");
+  if (summary) {
+    summary.textContent = allDueSales.length
+      ? `${overdueCount} vencido(s) • ${todayCount} para hoje • ${upcomingCount} nos próximos 7 dias`
+      : "Nenhum retorno vencido ou previsto para os próximos 7 dias";
+  }
+  const dueSales = allDueSales.slice(0, 5);
 
   if (!dueSales.length) {
     container.innerHTML = '<div class="dashboard-alert-empty">Nenhum retorno vencido ou previsto para os próximos 7 dias.</div>';
@@ -1267,7 +1347,21 @@ $("#saleForm").addEventListener("submit", (event) => {
   }
 
   closeSaleForm();
+
+  const newlyWon = opportunity.stage === "won" && existing?.stage !== "won";
+  if (opportunity.stage === "won") {
+    const financeSynced = syncWonSalesToFinance();
+    if (!financeSynced) {
+      alert("A venda foi salva, mas não foi possível atualizar o Financeiro agora. Abra a área Financeiro para tentar sincronizar novamente.");
+    } else if (financeSyncProtectedReceivedAmount) {
+      alert("O lançamento do Financeiro foi atualizado, mas o valor total não ficou abaixo dos recebimentos já registrados. Confira o valor da venda e o histórico de pagamentos.");
+    } else if (newlyWon) {
+      alert("Venda concluída! O lançamento correspondente foi conferido no Financeiro. Confira o vencimento e registre os recebimentos conforme o cliente pagar.");
+    }
+  }
+
   renderSales();
+  renderDashboard();
 });
 
 function formatSalesDate(value) {
@@ -1288,7 +1382,14 @@ function moveSaleToStage(saleId, stageId) {
     sales = previousSales;
     return;
   }
-  if (stageId === "won") syncWonSalesToFinance();
+  if (stageId === "won") {
+    const financeSynced = syncWonSalesToFinance();
+    if (!financeSynced) {
+      alert("A etapa foi salva, mas não foi possível atualizar o Financeiro agora. Abra a área Financeiro para tentar sincronizar novamente.");
+    } else if (financeSyncProtectedReceivedAmount) {
+      alert("O lançamento do Financeiro foi atualizado, mas o valor total foi mantido no mínimo dos recebimentos já registrados. Confira o valor da venda e o histórico de pagamentos.");
+    }
+  }
   renderSales();
 }
 
@@ -1345,7 +1446,7 @@ function renderSales(searchTerm = $("#salesSearch").value) {
                   <strong>${formatBRL(sale.expectedValue)}</strong>
                 </div>
                 ${sale.nextAction ? `<div class="sales-card-detail"><small>Próxima ação</small><span>${escapeHTML(sale.nextAction)}</span></div>` : ""}
-                ${sale.followupDate ? `<div class="sales-card-detail"><small>Próximo contato</small><span>${escapeHTML(formatSalesDate(sale.followupDate))}</span></div>` : ""}
+                ${sale.followupDate ? (() => { const followupState = sale.followupDate < localISODate() ? "overdue" : sale.followupDate === localISODate() ? "today" : "upcoming"; const followupLabel = followupState === "overdue" ? "Atrasado" : followupState === "today" ? "Hoje" : "Agendado"; return `<div class="sales-card-detail sales-followup-detail sales-followup-${followupState}"><small>Próximo contato</small><span>${escapeHTML(formatSalesDate(sale.followupDate))}<span class="sales-followup-badge">${followupLabel}</span></span></div>`; })() : ""}
                 <label class="sales-move-label">Mover para
                   <select data-sale-stage="${escapeHTML(sale.id)}" aria-label="Mover ${escapeHTML(sale.title)} para outra etapa">${stageOptions}</select>
                 </label>
@@ -1725,19 +1826,31 @@ function renderProduction(searchTerm = $("#productionSearch").value) {
   renderDashboard();
   renderProductionOptions();
   const normalizedSearch = (searchTerm || "").trim().toLocaleLowerCase("pt-BR");
+  const selectedStatus = $("#productionStatusFilter")?.value || "all";
+  const today = localISODate();
+  const currentMonth = today.slice(0, 7);
+  const isOrderOverdue = (order) => Boolean(
+    order.deadline && order.deadline < today && order.status !== "delivered"
+  );
   const filtered = productionOrders.filter((order) => {
     const client = clients.find((item) => item.id === order.clientId);
     const clientName = client?.name || order.clientName || "";
-    return `${order.title} ${clientName} ${order.saleTitle} ${order.quoteName} ${order.notes}`
+    const matchesSearch = `${order.title} ${clientName} ${order.saleTitle} ${order.quoteName} ${order.notes}`
       .toLocaleLowerCase("pt-BR").includes(normalizedSearch);
+    const matchesStatus = selectedStatus === "all" ||
+      (selectedStatus === "overdue" ? isOrderOverdue(order) : order.status === selectedStatus);
+    return matchesSearch && matchesStatus;
   });
 
-  const activeOrders = productionOrders.filter((order) => !["delivered"].includes(order.status));
-  $("#productionActiveCount").textContent = activeOrders.length;
+  $("#productionActiveCount").textContent = productionOrders.filter((order) => order.status !== "delivered").length;
   $("#productionWorkingCount").textContent = productionOrders.filter((order) =>
     ["production", "finishing"].includes(order.status)
   ).length;
   $("#productionReadyCount").textContent = productionOrders.filter((order) => order.status === "ready").length;
+  $("#productionOverdueCount").textContent = productionOrders.filter(isOrderOverdue).length;
+  $("#productionDeliveredMonthCount").textContent = productionOrders.filter((order) =>
+    order.status === "delivered" && (order.deliveredDate || "").startsWith(currentMonth)
+  ).length;
   $("#productionListCount").textContent = `${filtered.length} ${filtered.length === 1 ? "projeto" : "projetos"}`;
 
   const list = $("#productionList");
@@ -1745,6 +1858,7 @@ function renderProduction(searchTerm = $("#productionSearch").value) {
     list.innerHTML = `<div class="list-empty">${productionOrders.length === 0
       ? "Você ainda não cadastrou projetos de produção. Clique em “+ Nova ordem” para começar."
       : "Nenhum projeto encontrado para essa busca."}</div>`;
+    renderProductionCalendar(filtered);
     return;
   }
 
@@ -1761,7 +1875,14 @@ function renderProduction(searchTerm = $("#productionSearch").value) {
     const statusInfo = productionStatuses.find((item) => item.id === order.status) || productionStatuses[0];
     const client = clients.find((item) => item.id === order.clientId);
     const clientName = client?.name || order.clientName || "Sem cliente vinculado";
-    const isOverdue = order.deadline && order.deadline < new Date().toISOString().slice(0, 10) && order.status !== "delivered";
+    const today = localISODate();
+    const isOverdue = order.deadline && order.deadline < today && order.status !== "delivered";
+    const isDueToday = order.deadline === today && order.status !== "delivered";
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const isDueSoon = order.deadline > today && order.deadline <= localISODate(nextWeek) && order.status !== "delivered";
+    const deadlineClass = isOverdue ? "production-overdue" : isDueToday ? "production-due-today" : isDueSoon ? "production-due-soon" : "";
+    const deadlineLabel = isOverdue ? " · Atrasado" : isDueToday ? " · Vence hoje" : isDueSoon ? " · Próximo" : "";
     const statusOptions = productionStatuses.map((status) =>
       `<option value="${status.id}" ${status.id === order.status ? "selected" : ""}>${escapeHTML(status.title)}</option>`
     ).join("");
@@ -1782,7 +1903,7 @@ function renderProduction(searchTerm = $("#productionSearch").value) {
           ${order.photo ? `<a class="production-order-photo-link" href="${order.photo}" target="_blank" rel="noopener" aria-label="Abrir foto do projeto ${escapeHTML(order.title)}"><img class="production-order-photo" src="${order.photo}" alt="Foto de referência de ${escapeHTML(order.title)}" loading="lazy"></a>` : ""}
           <div class="production-dates">
             ${order.startDate ? `<span><small>Início</small><strong>${escapeHTML(formatProductionDate(order.startDate))}</strong></span>` : ""}
-            ${order.deadline ? `<span class="${isOverdue ? "production-overdue" : ""}"><small>Prazo de entrega</small><strong>${escapeHTML(formatProductionDate(order.deadline))}${isOverdue ? " · Atrasado" : ""}</strong></span>` : ""}
+            ${order.deadline ? `<span class="${deadlineClass}"><small>Prazo de entrega</small><strong>${escapeHTML(formatProductionDate(order.deadline))}${deadlineLabel}</strong></span>` : ""}
             ${order.deliveredDate ? `<span><small>Entregue em</small><strong>${escapeHTML(formatProductionDate(order.deliveredDate))}</strong></span>` : ""}
           </div>
           ${order.notes ? `<p class="production-notes">${escapeHTML(order.notes)}</p>` : ""}
@@ -1810,7 +1931,25 @@ function localDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
-function renderProductionCalendar(orders = productionOrders) {
+function renderProductionCalendar(orders) {
+  if (!orders) {
+    const normalizedSearch = ($("#productionSearch").value || "").trim().toLocaleLowerCase("pt-BR");
+    const selectedStatus = $("#productionStatusFilter")?.value || "all";
+    const today = localISODate();
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const horizon = localISODate(nextWeek);
+    orders = productionOrders.filter((order) => {
+      const client = clients.find((item) => item.id === order.clientId);
+      const clientName = client?.name || order.clientName || "";
+      const searchable = `${order.title} ${clientName} ${order.saleTitle} ${order.quoteName} ${order.notes}`
+        .toLocaleLowerCase("pt-BR").includes(normalizedSearch);
+      const overdue = order.deadline && order.deadline < today && order.status !== "delivered";
+      const matchesStatus = selectedStatus === "all" ||
+        (selectedStatus === "overdue" ? overdue : order.status === selectedStatus);
+      return searchable && matchesStatus;
+    });
+  }
   const year = productionCalendarDate.getFullYear();
   const month = productionCalendarDate.getMonth();
   const monthName = productionCalendarDate.toLocaleDateString("pt-BR", {
@@ -1929,6 +2068,7 @@ function updateProductionStatus(orderId, status) {
 }
 
 $("#productionSearch").addEventListener("input", (event) => renderProduction(event.target.value));
+$("#productionStatusFilter").addEventListener("change", () => renderProduction());
 
 $("#productionList").addEventListener("click", (event) => {
   const editButton = event.target.closest("[data-production-edit]");
@@ -2124,20 +2264,54 @@ function closeFinanceForm() {
   $("#financeLinkedSaleInfo").hidden = true;
 }
 
-function syncWonSalesToFinance() {
-  const linkedSaleIds = new Set(financeEntries.map((entry) => entry.saleId).filter(Boolean));
-  const eligibleSales = sales.filter((sale) =>
-    sale.stage === "won" &&
-    !linkedSaleIds.has(sale.id) &&
-    Number(sale.expectedValue) > 0
-  );
-  if (!eligibleSales.length) return true;
+let financeSyncProtectedReceivedAmount = false;
 
+function syncWonSalesToFinance() {
+  financeSyncProtectedReceivedAmount = false;
   const previousEntries = [...financeEntries];
   const today = localISODate();
-  const imported = eligibleSales.map((sale) => {
+  const linkedSaleIds = new Set(financeEntries.map((entry) => entry.saleId).filter(Boolean));
+  const wonSales = sales.filter((sale) =>
+    sale.stage === "won" && Number(sale.expectedValue) > 0
+  );
+  const newEntries = [];
+
+  for (const sale of wonSales) {
     const client = clients.find((item) => item.id === sale.clientId);
-    return {
+    const existing = financeEntries.find((entry) => entry.saleId === sale.id);
+
+    if (existing) {
+      const payments = Array.isArray(existing.payments) ? existing.payments : [];
+      const receivedTotal = Math.round(payments.reduce((sum, payment) =>
+        sum + Math.max(0, Number(payment.amount) || 0), 0) * 100) / 100;
+      let amount = Math.round(Math.max(0, Number(sale.expectedValue) || 0) * 100) / 100;
+      if (amount < receivedTotal) {
+        amount = receivedTotal;
+        financeSyncProtectedReceivedAmount = true;
+      }
+      const paidAmount = Math.min(amount, receivedTotal);
+      const status = paidAmount >= amount && amount > 0
+        ? "paid"
+        : paidAmount > 0 ? "partial" : "pending";
+      const updated = {
+        ...existing,
+        type: "income",
+        description: sale.title,
+        amount,
+        paidAmount,
+        payments,
+        status,
+        paidDate: payments.length ? payments[payments.length - 1].date : "",
+        clientId: sale.clientId || "",
+        clientName: client ? client.name : (sale.clientName || ""),
+        updatedAt: new Date().toISOString()
+      };
+      financeEntries = financeEntries.map((entry) => entry.id === existing.id ? updated : entry);
+      continue;
+    }
+
+    if (linkedSaleIds.has(sale.id)) continue;
+    newEntries.push({
       id: createId(),
       saleId: sale.id,
       type: "income",
@@ -2145,6 +2319,7 @@ function syncWonSalesToFinance() {
       category: "Venda / serviço",
       amount: Math.round(Math.max(0, Number(sale.expectedValue) || 0) * 100) / 100,
       paidAmount: 0,
+      payments: [],
       dueDate: today,
       status: "pending",
       paidDate: "",
@@ -2153,13 +2328,49 @@ function syncWonSalesToFinance() {
       notes: "Criado automaticamente ao concluir a venda no Funil. Atualize o valor recebido conforme o cliente realizar os pagamentos.",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    };
-  });
-  financeEntries = [...imported, ...financeEntries];
+    });
+    linkedSaleIds.add(sale.id);
+  }
+
+  if (!newEntries.length && JSON.stringify(previousEntries) === JSON.stringify(financeEntries)) {
+    return true;
+  }
+
+  financeEntries = [...newEntries, ...financeEntries];
   if (!saveFinanceEntries()) {
     financeEntries = previousEntries;
     return false;
   }
+  return true;
+}
+
+let financeCurrentView = "overview";
+
+const financeViewDescriptions = {
+  overview: "Todos os lançamentos do mês, sem duplicar registros.",
+  receivable: "Receitas com saldo pendente ou pagamento parcial. As entradas já quitadas ficam na Visão geral.",
+  payable: "Despesas que ainda precisam ser pagas. Despesas quitadas ficam na Visão geral.",
+  team: "Pagamentos de mão de obra registrados pelo cadastro da Equipe.",
+  commissions: "Comissões já registradas no Financeiro. Comissões aguardando pagamento continuam sendo acompanhadas em Parceiros / Comissões."
+};
+
+function setFinanceView(view) {
+  if (!Object.prototype.hasOwnProperty.call(financeViewDescriptions, view)) return;
+  financeCurrentView = view;
+  document.querySelectorAll("[data-finance-view]").forEach((button) => {
+    const active = button.dataset.financeView === view;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  $("#financeViewHelp").textContent = financeViewDescriptions[view];
+  renderFinance();
+}
+
+function financeEntryMatchesView(entry, view) {
+  if (view === "receivable") return entry.type === "income" && financeOutstandingAmount(entry) > 0;
+  if (view === "payable") return entry.type === "expense" && entry.status !== "paid";
+  if (view === "team") return entry.category === "Mão de obra" || Boolean(entry.teamMemberId);
+  if (view === "commissions") return entry.category === "Comissões" || Boolean(entry.linkedCommissionId);
   return true;
 }
 
@@ -2197,7 +2408,7 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
       (entry.status !== "paid" && entry.dueDate.startsWith(month));
     const searchable = `${entry.description} ${entry.category} ${entry.clientName || ""} ${entry.notes || ""}`
       .toLocaleLowerCase("pt-BR");
-    return matchesMonth && searchable.includes(normalizedSearch);
+    return matchesMonth && searchable.includes(normalizedSearch) && financeEntryMatchesView(entry, financeCurrentView);
   }).sort((a, b) => (financeEffectiveDate(b) || "").localeCompare(financeEffectiveDate(a) || ""));
 
   $("#financeCount").textContent = `${filtered.length} ${filtered.length === 1 ? "lançamento" : "lançamentos"}`;
@@ -2205,7 +2416,15 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
   if (filtered.length === 0) {
     list.innerHTML = `<div class="list-empty">${financeEntries.length === 0
       ? "Nenhum lançamento financeiro ainda. Ao concluir uma venda no Funil, ela será adicionada aqui automaticamente. Você também pode clicar em “+ Novo lançamento”."
-      : "Nenhum lançamento encontrado neste mês para essa busca."}</div>`;
+      : financeCurrentView === "receivable"
+        ? "Nenhuma conta a receber encontrada para este mês e busca."
+        : financeCurrentView === "payable"
+          ? "Nenhuma conta a pagar encontrada para este mês e busca."
+          : financeCurrentView === "team"
+            ? "Nenhum pagamento de equipe encontrado para este mês e busca."
+            : financeCurrentView === "commissions"
+              ? "Nenhuma comissão registrada no Financeiro para este mês e busca."
+              : "Nenhum lançamento encontrado neste mês para essa busca."}</div>`;
     return;
   }
 
@@ -2253,6 +2472,9 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
   }).join("");
 }
 
+document.querySelectorAll("[data-finance-view]").forEach((button) => {
+  button.addEventListener("click", () => setFinanceView(button.dataset.financeView));
+});
 $("#newFinanceEntryBtn").addEventListener("click", () => openFinanceForm());
 $("#cancelFinanceBtn").addEventListener("click", closeFinanceForm);
 $("#cancelFinanceBtnBottom").addEventListener("click", closeFinanceForm);
@@ -2342,12 +2564,6 @@ $("#financeList").addEventListener("click", (event) => {
     return;
   }
   if (action === "delete") {
-    const hasPayments = entry.status === "paid" || Number(entry.paidAmount) > 0 ||
-      (Array.isArray(entry.payments) && entry.payments.some((payment) => Number(payment.amount) > 0));
-    if (hasPayments) {
-      alert("Não é possível excluir um lançamento com pagamento/recebimento registrado. Para preservar o histórico financeiro, mantenha o lançamento e ajuste o status se necessário.");
-      return;
-    }
     if (entry.saleId) {
       alert("Este lançamento foi gerado para uma oportunidade do Funil. Para removê-lo, vá ao Funil e exclua a oportunidade vinculada. O CRM removerá junto apenas este lançamento se ele estiver pendente e sem pagamentos; se houver recebimentos ou projeto na Produção, a exclusão será bloqueada para preservar o histórico.");
       return;
@@ -2356,7 +2572,12 @@ $("#financeList").addEventListener("click", (event) => {
       alert("Este lançamento está vinculado a uma comissão. Acesse Parceiros / Comissões e resolva o vínculo por lá. Se a comissão não aparecer, pode ser um vínculo antigo sem registro correspondente; não exclua o lançamento manualmente antes de conferir o histórico.");
       return;
     }
-    if (!confirm(`Deseja realmente excluir o lançamento "${entry.description}"?`)) return;
+    const hasPayments = entry.status === "paid" || Number(entry.paidAmount) > 0 ||
+      (Array.isArray(entry.payments) && entry.payments.some((payment) => Number(payment.amount) > 0));
+    const confirmMessage = hasPayments
+      ? `ATENÇÃO: este lançamento possui pagamento/recebimento registrado. Como o CRM está em fase de testes, ele será excluído mesmo assim. Deseja continuar excluindo "${entry.description}"?`
+      : `Deseja realmente excluir o lançamento "${entry.description}"?`;
+    if (!confirm(confirmMessage)) return;
     const previousEntries = [...financeEntries];
     financeEntries = financeEntries.filter((item) => item.id !== entry.id);
     if (!saveFinanceEntries()) {
@@ -2905,3 +3126,274 @@ $("#commissionList").addEventListener("click", (event) => {
   }
   setCommissionStatus(button.dataset.commissionId, button.dataset.commissionAction);
 });
+
+
+/* ---------- Cadastro de equipe ---------- */
+const TEAM_STORAGE_KEY = "lr-interiores-equipe-v1";
+let teamMembers = loadTeamMembers();
+
+function loadTeamMembers() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TEAM_STORAGE_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item) => item && typeof item.id === "string" && typeof item.name === "string")
+      .map((item) => ({
+        ...item,
+        name: item.name.trim(),
+        role: typeof item.role === "string" ? item.role : "",
+        paymentMode: ["Diário", "Mensal", "Outro"].includes(item.paymentMode) ? item.paymentMode : "Diário",
+        amount: Math.max(0, Number(item.amount) || 0),
+        createdAt: item.createdAt || new Date().toISOString(),
+        updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+      }));
+  } catch (error) {
+    console.error("Não foi possível carregar a equipe:", error);
+    return [];
+  }
+}
+
+function saveTeamMembers() {
+  try {
+    localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(teamMembers));
+    return true;
+  } catch (error) {
+    console.error("Não foi possível salvar a equipe:", error);
+    alert("Não foi possível preparar o cadastro da equipe para sincronização. Confira a conexão com o Firebase e tente novamente.");
+    return false;
+  }
+}
+
+function updateTeamPaymentFields() {
+  const mode = $("#teamPaymentMode").value;
+  const isDaily = mode === "Diário";
+  $("#teamAmountLabel").textContent = isDaily ? "Valor da diária (R$) *" : mode === "Mensal" ? "Valor mensal (R$) *" : "Valor por pagamento (R$) *";
+  $("#teamAmount").placeholder = isDaily ? "Ex.: 150,00 por dia" : mode === "Mensal" ? "Ex.: 2.500,00 por mês" : "Ex.: 300,00 por pagamento";
+  $("#teamPaymentHint").textContent = isDaily
+    ? "Informe o valor de um dia trabalhado. A quantidade de dias será preenchida ao registrar cada pagamento no Financeiro."
+    : mode === "Mensal"
+      ? "Informe o valor fixo mensal. No pagamento mensal, o CRM não solicitará a quantidade de dias."
+      : "Informe o valor padrão de cada pagamento. Não será necessário informar a quantidade de dias.";
+}
+
+function openTeamMemberForm(member = null) {
+  const form = $("#teamForm");
+  form.reset();
+  $("#teamMemberId").value = "";
+  $("#teamPaymentMode").value = member?.paymentMode || "Diário";
+  $("#teamFormTitle").textContent = member ? "Editar pessoa da equipe" : "Nova pessoa da equipe";
+  if (member) {
+    $("#teamMemberId").value = member.id;
+    $("#teamMemberName").value = member.name || "";
+    $("#teamMemberRole").value = member.role || "";
+    $("#teamPaymentMode").value = member.paymentMode;
+    $("#teamAmount").value = String(member.amount);
+  }
+  updateTeamPaymentFields();
+  form.hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#teamMemberName").focus({ preventScroll: true });
+}
+
+function closeTeamMemberForm() {
+  $("#teamForm").hidden = true;
+  $("#teamForm").reset();
+  $("#teamMemberId").value = "";
+  updateTeamPaymentFields();
+}
+
+function updateTeamPaymentPreview() {
+  const memberId = $("#teamPaymentMemberId").value;
+  const member = teamMembers.find((item) => item.id === memberId);
+  if (!member) {
+    $("#teamPaymentCalculated").value = "";
+    return;
+  }
+  if (member.paymentMode !== "Diário") {
+    $("#teamPaymentCalculated").value = member.amount.toFixed(2);
+    $("#teamPaymentCalculationHint").textContent = member.paymentMode === "Mensal"
+      ? `Pagamento mensal de ${formatBRL(member.amount)} para ${member.name}.`
+      : `Pagamento de ${formatBRL(member.amount)} para ${member.name}, conforme o modo “Outro”.`;
+    return;
+  }
+  const days = Number($("#teamPaymentDays").value);
+  if (!Number.isInteger(days) || days < 1 || days > 366) {
+    $("#teamPaymentCalculated").value = "";
+    $("#teamPaymentCalculationHint").textContent = `Valor da diária: ${formatBRL(member.amount)}. Informe de 1 a 366 dias trabalhados.`;
+    return;
+  }
+  const total = Math.round(member.amount * days * 100) / 100;
+  $("#teamPaymentCalculated").value = total.toFixed(2);
+  $("#teamPaymentCalculationHint").textContent = `${days} dia(s) × ${formatBRL(member.amount)} = ${formatBRL(total)}.`;
+}
+
+function openTeamPaymentForm(member) {
+  if (!member) return;
+  closeTeamMemberForm();
+  const form = $("#teamPaymentForm");
+  form.reset();
+  $("#teamPaymentMemberId").value = member.id;
+  $("#teamPaymentFormTitle").textContent = `Pagamento — ${member.name}`;
+  $("#teamPaymentDate").value = localISODate();
+  const isDaily = member.paymentMode === "Diário";
+  $("#teamPaymentDaysField").hidden = !isDaily;
+  $("#teamPaymentDays").required = isDaily;
+  $("#teamPaymentDays").disabled = !isDaily;
+  $("#teamPaymentDays").value = "";
+  $("#teamPaymentCalculated").value = "";
+  form.hidden = false;
+  updateTeamPaymentPreview();
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (isDaily) $("#teamPaymentDays").focus({ preventScroll: true });
+  else $("#teamPaymentDate").focus({ preventScroll: true });
+}
+
+function closeTeamPaymentForm() {
+  const form = $("#teamPaymentForm");
+  form.hidden = true;
+  form.reset();
+  $("#teamPaymentMemberId").value = "";
+  $("#teamPaymentDaysField").hidden = false;
+  $("#teamPaymentDays").required = false;
+  $("#teamPaymentDays").disabled = false;
+  $("#teamPaymentCalculated").value = "";
+}
+
+function renderTeamMembers() {
+  const term = ($("#teamSearch").value || "").trim().toLocaleLowerCase("pt-BR");
+  const filtered = teamMembers.filter((member) =>
+    `${member.name} ${member.role}`.toLocaleLowerCase("pt-BR").includes(term)
+  );
+  $("#teamMemberCount").textContent = `${filtered.length} ${filtered.length === 1 ? "pessoa cadastrada" : "pessoas cadastradas"}`;
+  $("#teamMemberList").innerHTML = filtered.length ? filtered.map((member) => {
+    const modeLabel = member.paymentMode === "Diário" ? "Diária" : member.paymentMode === "Mensal" ? "Mensal" : "Outro";
+    const amountLabel = member.paymentMode === "Diário" ? "Valor por dia" : member.paymentMode === "Mensal" ? "Valor mensal" : "Valor por pagamento";
+    return `<article class="team-row">
+      <div class="team-avatar">${escapeHTML(member.name.slice(0, 2).toLocaleUpperCase("pt-BR"))}</div>
+      <div class="team-info"><strong>${escapeHTML(member.name)}</strong><span>${escapeHTML(member.role)}</span>
+        <small>${modeLabel} • ${amountLabel}: ${formatBRL(member.amount)}</small></div>
+      <div class="team-actions">
+        <button type="button" class="button button-primary" data-team-pay="${escapeHTML(member.id)}">Registrar pagamento</button>
+        <button type="button" class="button button-outline" data-team-edit="${escapeHTML(member.id)}">Editar</button>
+        <button type="button" class="button button-danger" data-team-delete="${escapeHTML(member.id)}">Excluir</button>
+      </div>
+    </article>`;
+  }).join("") : '<div class="list-empty">Nenhuma pessoa cadastrada. Clique em “+ Nova pessoa” para começar.</div>';
+}
+
+$("#newTeamMemberBtn").addEventListener("click", () => openTeamMemberForm());
+$("#cancelTeamBtn").addEventListener("click", closeTeamMemberForm);
+$("#cancelTeamBtnBottom").addEventListener("click", closeTeamMemberForm);
+$("#teamPaymentMode").addEventListener("change", updateTeamPaymentFields);
+$("#teamSearch").addEventListener("input", renderTeamMembers);
+$("#teamPaymentDays").addEventListener("input", updateTeamPaymentPreview);
+$("#cancelTeamPaymentBtn").addEventListener("click", closeTeamPaymentForm);
+$("#cancelTeamPaymentBtnBottom").addEventListener("click", closeTeamPaymentForm);
+
+$("#teamPaymentForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const member = teamMembers.find((item) => item.id === $("#teamPaymentMemberId").value);
+  if (!member) {
+    alert("Não foi possível localizar a pessoa da equipe. Feche o formulário e tente novamente.");
+    return;
+  }
+  const paymentDate = $("#teamPaymentDate").value;
+  const isDaily = member.paymentMode === "Diário";
+  const days = isDaily ? Number($("#teamPaymentDays").value) : null;
+  if (!paymentDate || !/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
+    alert("Informe uma data válida para o pagamento.");
+    $("#teamPaymentDate").focus();
+    return;
+  }
+  if (isDaily && (!Number.isInteger(days) || days < 1 || days > 366)) {
+    alert("Informe a quantidade de dias trabalhados (de 1 a 366).");
+    $("#teamPaymentDays").focus();
+    return;
+  }
+  const amount = Math.round(member.amount * (isDaily ? days : 1) * 100) / 100;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert("O valor calculado do pagamento precisa ser maior que zero.");
+    return;
+  }
+  const now = new Date().toISOString();
+  const paymentEntry = {
+    id: createId(),
+    type: "expense",
+    description: `Pagamento de equipe — ${member.name}`,
+    category: "Mão de obra",
+    amount,
+    paidAmount: 0,
+    payments: [],
+    dueDate: paymentDate,
+    status: "paid",
+    paidDate: paymentDate,
+    clientId: "",
+    clientName: "",
+    notes: `Pessoa: ${member.name} · Função: ${member.role} · Modalidade: ${member.paymentMode}${isDaily ? ` · Dias trabalhados: ${days} · Diária: ${formatBRL(member.amount)}` : ""}`,
+    teamMemberId: member.id,
+    teamMemberName: member.name,
+    teamPaymentMode: member.paymentMode,
+    teamPaymentDays: isDaily ? days : null,
+    teamDailyRate: isDaily ? member.amount : null,
+    createdAt: now,
+    updatedAt: now
+  };
+  const previousEntries = [...financeEntries];
+  financeEntries.unshift(paymentEntry);
+  if (!saveFinanceEntries()) {
+    financeEntries = previousEntries;
+    return;
+  }
+  closeTeamPaymentForm();
+  renderTeamMembers();
+  renderFinance();
+  alert(`Pagamento de ${formatBRL(amount)} registrado no Financeiro para ${member.name}.`);
+});
+
+$("#teamForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const id = $("#teamMemberId").value;
+  const name = $("#teamMemberName").value.trim();
+  const role = $("#teamMemberRole").value.trim();
+  const paymentMode = $("#teamPaymentMode").value;
+  const amount = Number($("#teamAmount").value);
+  if (!name || !role || !["Diário", "Mensal", "Outro"].includes(paymentMode) || !Number.isFinite(amount) || amount <= 0) {
+    alert("Preencha o nome, a função, o modo de recebimento e um valor maior que zero.");
+    return;
+  }
+  const existing = teamMembers.find((item) => item.id === id);
+  const previous = [...teamMembers];
+  const now = new Date().toISOString();
+  const record = { id: id || createId(), name, role, paymentMode, amount: Math.round(amount * 100) / 100,
+    createdAt: existing?.createdAt || now, updatedAt: now };
+  teamMembers = id ? teamMembers.map((item) => item.id === id ? record : item) : [record, ...teamMembers];
+  if (!saveTeamMembers()) { teamMembers = previous; return; }
+  closeTeamMemberForm();
+  renderTeamMembers();
+});
+
+$("#teamMemberList").addEventListener("click", (event) => {
+  const payButton = event.target.closest("[data-team-pay]");
+  const editButton = event.target.closest("[data-team-edit]");
+  const deleteButton = event.target.closest("[data-team-delete]");
+  if (payButton) {
+    const member = teamMembers.find((item) => item.id === payButton.dataset.teamPay);
+    if (member) openTeamPaymentForm(member);
+    return;
+  }
+  if (editButton) {
+    const member = teamMembers.find((item) => item.id === editButton.dataset.teamEdit);
+    if (member) openTeamMemberForm(member);
+    return;
+  }
+  if (deleteButton) {
+    const member = teamMembers.find((item) => item.id === deleteButton.dataset.teamDelete);
+    if (!member) return;
+    if (!confirm(`Deseja excluir o cadastro de “${member.name}”?`)) return;
+    const previous = [...teamMembers];
+    teamMembers = teamMembers.filter((item) => item.id !== member.id);
+    if (!saveTeamMembers()) { teamMembers = previous; return; }
+    renderTeamMembers();
+  }
+});
+
+updateTeamPaymentFields();

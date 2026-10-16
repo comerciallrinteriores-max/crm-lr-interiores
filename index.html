@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#173d32">
   <title>CRM | LR Interiores</title>
-  <link rel="stylesheet" href="style.css?v=20261016-1">
+  <link rel="stylesheet" href="style.css?v=20261016-dashboard2">
   <link rel="stylesheet" href="orcamentos.css?v=20261015-2">
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
-  <link rel="stylesheet" href="producao.css?v=20261015-2">
-  <link rel="stylesheet" href="financeiro.css?v=20261015-2">
+  <link rel="stylesheet" href="producao.css?v=20261016-production2">
+  <link rel="stylesheet" href="financeiro.css?v=20261016-views1">
   <link rel="stylesheet" href="marketing.css?v=20261015-1">
-  <script type="module" src="firebase-auth.js?v=8"></script>
+  <script type="module" src="firebase-auth.js?v=10"></script>
   <script type="module" src="idle-lock.js?v=2"></script>
   <style>[hidden] { display: none !important; }</style>
 </head>
@@ -58,15 +58,28 @@
         </div>
       </div>
       <p class="menu-label">MENU PRINCIPAL</p>
-      <nav class="menu">
-        <button class="nav-item active" data-page="dashboard">⌂ <span>Painel inicial</span></button>
-        <button class="nav-item" data-page="clientes">♙ <span>Clientes</span></button>
-        <button class="nav-item" data-page="orcamentos">▤ <span>Orçamentos</span></button>
-        <button class="nav-item" data-page="vendas">↗ <span>Funil de vendas</span></button>
-        <button class="nav-item" data-page="producao">⚒ <span>Produção e entregas</span></button>
-        <button class="nav-item" data-page="financeiro">R$ <span>Financeiro</span></button>
-        <button class="nav-item" data-page="marketing">◎ <span>Marketing</span></button>
-        <button class="nav-item" data-page="parceiros">♧ <span>Parceiros / Comissões</span></button>
+      <nav class="menu" aria-label="Navegação principal">
+        <div class="menu-group">
+          <p class="menu-group-title">VISÃO GERAL</p>
+          <button class="nav-item active" data-page="dashboard">⌂ <span>Painel inicial</span></button>
+        </div>
+        <div class="menu-group">
+          <p class="menu-group-title">COMERCIAL</p>
+          <button class="nav-item" data-page="clientes">♙ <span>Clientes</span></button>
+          <button class="nav-item" data-page="orcamentos">▤ <span>Orçamentos</span></button>
+          <button class="nav-item" data-page="vendas">↗ <span>Funil de vendas</span></button>
+          <button class="nav-item" data-page="marketing">◎ <span>Marketing</span></button>
+          <button class="nav-item" data-page="parceiros">♧ <span>Parceiros / Comissões</span></button>
+        </div>
+        <div class="menu-group">
+          <p class="menu-group-title">OPERAÇÃO</p>
+          <button class="nav-item" data-page="producao">⚒ <span>Produção e entregas</span></button>
+          <button class="nav-item" data-page="equipe">♙ <span>Equipe</span></button>
+        </div>
+        <div class="menu-group">
+          <p class="menu-group-title">FINANCEIRO</p>
+          <button class="nav-item" data-page="financeiro">R$ <span>Financeiro</span></button>
+        </div>
       </nav>
       <div class="sidebar-bottom">
         <span class="status-dot"></span>
@@ -125,6 +138,32 @@
             <small>Valores registrados como recebidos</small>
           </article>
         </div>
+        <div class="dashboard-metrics-grid" aria-label="Indicadores de atenção">
+          <article class="stat-card dashboard-metric-card">
+            <span class="stat-icon">↗</span>
+            <span class="stat-label">Valor em vendas abertas</span>
+            <strong id="dashboardPipelineValue">R$ 0,00</strong>
+            <small>Oportunidades ainda não concluídas</small>
+          </article>
+          <article class="stat-card dashboard-metric-card">
+            <span class="stat-icon">↓</span>
+            <span class="stat-label">A receber</span>
+            <strong id="dashboardReceivableValue">R$ 0,00</strong>
+            <small>Saldo pendente dos clientes</small>
+          </article>
+          <article class="stat-card dashboard-metric-card">
+            <span class="stat-icon">↑</span>
+            <span class="stat-label">Contas a pagar</span>
+            <strong id="dashboardPayableValue">R$ 0,00</strong>
+            <small>Despesas ainda pendentes</small>
+          </article>
+          <article class="stat-card dashboard-metric-card">
+            <span class="stat-icon">⚒</span>
+            <span class="stat-label">Produções atrasadas</span>
+            <strong id="dashboardOverdueProduction">0</strong>
+            <small>Pedidos com prazo vencido</small>
+          </article>
+        </div>
         <div class="content-card">
           <div class="section-heading">
             <div>
@@ -145,7 +184,7 @@
             <div class="section-heading">
               <div>
                 <h2>Próximos contatos</h2>
-                <p>Retornos vencidos, de hoje e dos próximos 7 dias</p>
+                <p id="dashboardFollowupSummary">Retornos vencidos, de hoje e dos próximos 7 dias</p>
               </div>
               <button class="button button-outline" data-go="vendas">Ver funil</button>
             </div>
@@ -510,6 +549,14 @@
             <span>Prontos para entrega</span>
             <strong id="productionReadyCount">0</strong>
           </article>
+          <article class="production-summary-card production-summary-alert">
+            <span>Produções atrasadas</span>
+            <strong id="productionOverdueCount">0</strong>
+          </article>
+          <article class="production-summary-card production-summary-success">
+            <span>Entregues neste mês</span>
+            <strong id="productionDeliveredMonthCount">0</strong>
+          </article>
         </div>
 
         <form id="productionForm" class="content-card production-form" hidden>
@@ -585,6 +632,16 @@
             </div>
             <div class="production-toolbar-actions">
               <input id="productionSearch" class="search-input" placeholder="Buscar projeto ou cliente..." aria-label="Buscar projetos de produção">
+              <select id="productionStatusFilter" class="production-status-filter" aria-label="Filtrar projetos por status">
+                <option value="all">Todos os status</option>
+                <option value="pending">Aguardando início</option>
+                <option value="production">Em produção</option>
+                <option value="finishing">Acabamento / revisão</option>
+                <option value="ready">Pronto para entrega</option>
+                <option value="delivered">Entregue ao cliente</option>
+                <option value="paused">Pausado</option>
+                <option value="overdue">Somente atrasados</option>
+              </select>
               <div class="production-view-switch" role="group" aria-label="Visualização dos projetos">
                 <button type="button" class="button button-outline active" id="productionListViewBtn" aria-pressed="true">Lista</button>
                 <button type="button" class="button button-outline" id="productionCalendarViewBtn" aria-pressed="false">Calendário</button>
@@ -714,6 +771,15 @@
           </div>
         </form>
 
+        <div class="finance-view-tabs" role="tablist" aria-label="Visualizações do financeiro">
+          <button type="button" class="finance-view-tab active" role="tab" aria-selected="true" data-finance-view="overview">Visão geral</button>
+          <button type="button" class="finance-view-tab" role="tab" aria-selected="false" data-finance-view="receivable">Contas a receber</button>
+          <button type="button" class="finance-view-tab" role="tab" aria-selected="false" data-finance-view="payable">Contas a pagar</button>
+          <button type="button" class="finance-view-tab" role="tab" aria-selected="false" data-finance-view="team">Equipe</button>
+          <button type="button" class="finance-view-tab" role="tab" aria-selected="false" data-finance-view="commissions">Comissões</button>
+        </div>
+        <p id="financeViewHelp" class="finance-view-help">Todos os lançamentos do mês, sem duplicar registros.</p>
+
         <div class="content-card finance-list-card">
           <div class="list-toolbar">
             <div>
@@ -821,6 +887,59 @@
             <input id="commissionSearch" class="search-input" placeholder="Buscar parceiro, projeto ou cliente..." aria-label="Buscar comissões">
           </div>
           <div id="commissionList" class="commission-list"></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-equipe">
+        <div class="section-heading">
+          <div><h2>Cadastro de Equipe</h2><p>Cadastre quem trabalha com a LR Interiores e defina como cada pessoa recebe.</p></div>
+          <button class="button button-primary" id="newTeamMemberBtn">+ Nova pessoa</button>
+        </div>
+        <div class="team-notice"><strong>Como funciona o recebimento</strong>
+          <p>No modo diário, informe os dias trabalhados ao registrar cada pagamento. O CRM calcula a diária multiplicada pelos dias. No modo mensal, o pagamento usa o valor fixo mensal. Em “Outro”, o valor cadastrado será usado em cada pagamento, sem pedir dias. Todo pagamento entra no Financeiro como despesa paga de mão de obra.</p>
+        </div>
+        <form id="teamForm" class="content-card team-form" hidden>
+          <div class="form-heading"><div><h2 id="teamFormTitle">Nova pessoa da equipe</h2><p>Preencha os dados de cadastro e recebimento.</p></div>
+            <button type="button" class="button button-outline" id="cancelTeamBtn">Cancelar</button>
+          </div>
+          <input type="hidden" id="teamMemberId">
+          <div class="form-grid">
+            <label>Nome completo *<input id="teamMemberName" required maxlength="150" placeholder="Nome da pessoa"></label>
+            <label>Função *<input id="teamMemberRole" required maxlength="100" placeholder="Ex.: Montador, ajudante, instalador"></label>
+            <label>Modo de recebimento *<select id="teamPaymentMode" required><option value="Diário">Diário</option><option value="Mensal">Mensal</option><option value="Outro">Outro</option></select></label>
+            <label><span id="teamAmountLabel">Valor da diária (R$) *</span><input id="teamAmount" type="number" min="0.01" max="100000000" step="0.01" required placeholder="Ex.: 150,00 por dia"></label>
+          </div>
+          <p class="team-form-hint" id="teamPaymentHint">Informe quanto a pessoa recebe por dia trabalhado.</p>
+          <div class="form-actions"><button type="button" class="button button-outline" id="cancelTeamBtnBottom">Cancelar</button><button type="submit" class="button button-primary">Salvar cadastro</button></div>
+        </form>
+        <form id="teamPaymentForm" class="content-card team-form team-payment-form" hidden>
+          <div class="form-heading">
+            <div><h2 id="teamPaymentFormTitle">Registrar pagamento</h2><p>O pagamento será lançado no Financeiro como uma despesa paga de mão de obra.</p></div>
+            <button type="button" class="button button-outline" id="cancelTeamPaymentBtn">Cancelar</button>
+          </div>
+          <input type="hidden" id="teamPaymentMemberId">
+          <div class="form-grid">
+            <label id="teamPaymentDaysField">Dias trabalhados *
+              <input id="teamPaymentDays" type="number" min="1" max="366" step="1" placeholder="Ex.: 5">
+            </label>
+            <label>Data do pagamento *
+              <input id="teamPaymentDate" type="date" required>
+            </label>
+            <label>Valor do pagamento (R$)
+              <input id="teamPaymentCalculated" type="number" min="0.01" step="0.01" readonly aria-describedby="teamPaymentCalculationHint">
+            </label>
+          </div>
+          <p class="team-form-hint" id="teamPaymentCalculationHint">O valor será calculado automaticamente.</p>
+          <div class="form-actions">
+            <button type="button" class="button button-outline" id="cancelTeamPaymentBtnBottom">Cancelar</button>
+            <button type="submit" class="button button-primary">Registrar no Financeiro</button>
+          </div>
+        </form>
+        <div class="content-card">
+          <div class="list-toolbar"><div><h2>Pessoas cadastradas</h2><p id="teamMemberCount">0 pessoas cadastradas</p></div>
+            <input id="teamSearch" class="search-input" placeholder="Buscar por nome ou função..." aria-label="Buscar equipe">
+          </div>
+          <div id="teamMemberList" class="team-list"></div>
         </div>
       </section>
 
