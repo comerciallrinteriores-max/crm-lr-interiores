@@ -95,6 +95,7 @@ function saveQuotes() {
       QUOTES_STORAGE_KEY,
       JSON.stringify(quotes)
     );
+    if (typeof refreshCommissionLinks === "function") refreshCommissionLinks();
     return true;
   } catch (error) {
     console.error("Não foi possível salvar os orçamentos:", error);
@@ -111,7 +112,8 @@ const pageNames = {
   vendas: "Funil de vendas",
   producao: "Produção e entregas",
   financeiro: "Financeiro",
-  marketing: "Marketing"
+  marketing: "Marketing",
+  parceiros: "Parceiros / Comissões"
 };
 
 function navigateTo(pageName) {
@@ -146,6 +148,7 @@ function navigateTo(pageName) {
   if (pageName === "producao") renderProduction();
   if (pageName === "financeiro") renderFinance();
   if (pageName === "marketing") renderMarketing();
+  if (pageName === "parceiros") renderPartners();
 }
 
 $$(".nav-item").forEach((button) => {
@@ -1097,6 +1100,7 @@ function loadSales() {
 function saveSales() {
   try {
     localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(sales));
+    if (typeof refreshCommissionLinks === "function") refreshCommissionLinks();
     return true;
   } catch (error) {
     console.error("Não foi possível salvar o funil de vendas:", error);
@@ -2303,3 +2307,415 @@ renderQuotes();
 updateQuoteCalculations();
 renderSales();
 renderProduction();
+
+
+/* ---------- Parceiros e comissões ---------- */
+const PARTNERS_STORAGE_KEY = "lr-interiores-parceiros-v1";
+const COMMISSIONS_STORAGE_KEY = "lr-interiores-comissoes-v1";
+const defaultPartnerRates = { Marceneiro: 20, Arquiteto: 10, Outros: 0 };
+const commissionStatusLabels = {
+  awaiting_sale: "Aguardando fechamento",
+  pending: "Pendente",
+  paid: "Paga",
+  cancelled: "Cancelada"
+};
+let partners = loadPartners();
+let commissions = loadCommissions();
+
+function loadPartners() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PARTNERS_STORAGE_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item) => item && typeof item.id === "string" && typeof item.name === "string")
+      .map((item) => ({
+        ...item,
+        category: ["Marceneiro", "Arquiteto", "Outros"].includes(item.category) ? item.category : "Outros",
+        rate: Math.min(100, Math.max(0, Number(item.rate) || 0)),
+        createdAt: item.createdAt || new Date().toISOString(),
+        updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+      }));
+  } catch (error) {
+    console.error("Não foi possível carregar os parceiros:", error);
+    return [];
+  }
+}
+
+function savePartners() {
+  try {
+    localStorage.setItem(PARTNERS_STORAGE_KEY, JSON.stringify(partners));
+    return true;
+  } catch (error) {
+    console.error("Não foi possível salvar os parceiros:", error);
+    alert("Não foi possível preparar os parceiros para sincronização. Confira a conexão com o Firebase e tente novamente.");
+    return false;
+  }
+}
+
+function loadCommissions() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(COMMISSIONS_STORAGE_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item) => item && typeof item.id === "string" && typeof item.partnerId === "string" && typeof item.quoteId === "string")
+      .map((item) => ({
+        ...item,
+        rate: Math.min(100, Math.max(0, Number(item.rate) || 0)),
+        basePrice: Math.max(0, Number(item.basePrice) || 0),
+        amount: Math.max(0, Number(item.amount) || 0),
+        status: ["awaiting_sale", "pending", "paid", "cancelled"].includes(item.status) ? item.status : "awaiting_sale",
+        paidAt: item.paidAt || ""
+      }));
+  } catch (error) {
+    console.error("Não foi possível carregar as comissões:", error);
+    return [];
+  }
+}
+
+function saveCommissions() {
+  try {
+    localStorage.setItem(COMMISSIONS_STORAGE_KEY, JSON.stringify(commissions));
+    return true;
+  } catch (error) {
+    console.error("Não foi possível salvar as comissões:", error);
+    alert("Não foi possível preparar as comissões para sincronização. Confira a conexão com o Firebase e tente novamente.");
+    return false;
+  }
+}
+
+function findCommissionSale(quoteId) {
+  return sales.find((sale) => sale.quoteId === quoteId && sale.stage === "won") || null;
+}
+
+function refreshCommissionLinks() {
+  if (!Array.isArray(commissions) || !Array.isArray(partners)) return;
+  let changed = false;
+  const now = new Date().toISOString();
+  commissions = commissions.map((entry) => {
+    if (["paid", "cancelled"].includes(entry.status)) return entry;
+    const partner = partners.find((item) => item.id === entry.partnerId);
+    const quote = quotes.find((item) => item.id === entry.quoteId);
+    if (!partner || !quote) return entry;
+    const closedSale = findCommissionSale(quote.id);
+    if (closedSale) {
+      if (entry.status !== "pending" || entry.saleId !== closedSale.id) {
+        changed = true;
+        return {
+          ...entry,
+          partnerName: partner.name,
+          quoteName: quote.name,
+          clientName: quote.clientName || clients.find((item) => item.id === quote.clientId)?.name || "",
+          saleId: closedSale.id,
+          rate: partner.rate,
+          basePrice: Math.max(0, Number(quote.price) || 0),
+          amount: Math.round(Math.max(0, Number(quote.price) || 0) * partner.rate) / 100,
+          status: "pending",
+          dueAt: now,
+          updatedAt: now
+        };
+      }
+      return entry;
+    }
+    if (entry.status !== "awaiting_sale" || entry.saleId) {
+      changed = true;
+      return {
+        ...entry,
+        partnerName: partner.name,
+        quoteName: quote.name,
+        clientName: quote.clientName || clients.find((item) => item.id === quote.clientId)?.name || "",
+        saleId: "",
+        rate: partner.rate,
+        basePrice: Math.max(0, Number(quote.price) || 0),
+        amount: Math.round(Math.max(0, Number(quote.price) || 0) * partner.rate) / 100,
+        status: "awaiting_sale",
+        dueAt: "",
+        updatedAt: now
+      };
+    }
+    const refreshedAmount = Math.round(Math.max(0, Number(quote.price) || 0) * partner.rate) / 100;
+    const refreshedClientName = quote.clientName || clients.find((item) => item.id === quote.clientId)?.name || "";
+    if (entry.partnerName !== partner.name || entry.quoteName !== quote.name || entry.clientName !== refreshedClientName ||
+        entry.rate !== partner.rate || entry.basePrice !== Math.max(0, Number(quote.price) || 0) || entry.amount !== refreshedAmount) {
+      changed = true;
+      return {
+        ...entry,
+        partnerName: partner.name,
+        quoteName: quote.name,
+        clientName: refreshedClientName,
+        rate: partner.rate,
+        basePrice: Math.max(0, Number(quote.price) || 0),
+        amount: refreshedAmount,
+        updatedAt: now
+      };
+    }
+    return entry;
+  });
+  if (changed) saveCommissions();
+}
+
+function formatCommissionDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString("pt-BR");
+}
+
+function openPartnerForm(partner = null) {
+  const form = $("#partnerForm");
+  form.reset();
+  $("#partnerId").value = "";
+  $("#partnerCategory").value = partner?.category || "Marceneiro";
+  $("#partnerRate").value = String(partner ? partner.rate : defaultPartnerRates[$("#partnerCategory").value]);
+  $("#partnerFormTitle").textContent = partner ? "Editar parceiro" : "Novo parceiro";
+  if (partner) {
+    $("#partnerId").value = partner.id;
+    $("#partnerName").value = partner.name;
+    $("#partnerCategory").value = partner.category;
+    $("#partnerRate").value = String(partner.rate);
+  }
+  form.hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#partnerName").focus({ preventScroll: true });
+}
+
+function closePartnerForm() {
+  $("#partnerForm").hidden = true;
+  $("#partnerForm").reset();
+  $("#partnerId").value = "";
+}
+
+$("#newPartnerBtn").addEventListener("click", () => openPartnerForm());
+$("#cancelPartnerBtn").addEventListener("click", closePartnerForm);
+$("#cancelPartnerBtnBottom").addEventListener("click", closePartnerForm);
+$("#partnerCategory").addEventListener("change", () => {
+  $("#partnerRate").value = String(defaultPartnerRates[$("#partnerCategory").value] ?? 0);
+});
+$("#partnerForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const id = $("#partnerId").value;
+  const name = $("#partnerName").value.trim();
+  const category = $("#partnerCategory").value;
+  const rate = Number($("#partnerRate").value);
+  if (!name || !Number.isFinite(rate) || rate < 0 || rate > 100) {
+    alert("Informe o nome e um percentual entre 0% e 100%.");
+    return;
+  }
+  const existing = partners.find((item) => item.id === id);
+  const previous = [...partners];
+  const now = new Date().toISOString();
+  const record = {
+    id: id || createId(),
+    name,
+    category,
+    rate,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now
+  };
+  partners = id ? partners.map((item) => item.id === id ? record : item) : [record, ...partners];
+  if (!savePartners()) {
+    partners = previous;
+    return;
+  }
+  refreshCommissionLinks();
+  closePartnerForm();
+  renderPartners();
+});
+
+function openCommissionForm() {
+  if (!partners.length) {
+    alert("Cadastre um parceiro antes de vincular um orçamento.");
+    openPartnerForm();
+    return;
+  }
+  if (!quotes.length) {
+    alert("Cadastre um orçamento antes de criar uma comissão.");
+    navigateTo("orcamentos");
+    return;
+  }
+  $("#commissionForm").reset();
+  $("#commissionRatePreview").value = "";
+  $("#commissionAmountPreview").value = formatBRL(0);
+  $("#commissionQuoteHint").textContent = "A comissão ficará aguardando até que a oportunidade vinculada seja marcada como “Venda concluída”.";
+  renderCommissionOptions();
+  $("#commissionForm").hidden = false;
+  $("#commissionForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function closeCommissionForm() {
+  $("#commissionForm").hidden = true;
+  $("#commissionForm").reset();
+}
+function renderCommissionOptions() {
+  const partnerSelect = $("#commissionPartner");
+  const quoteSelect = $("#commissionQuote");
+  const selectedPartner = partnerSelect.value;
+  const selectedQuote = quoteSelect.value;
+  partnerSelect.innerHTML = '<option value="">Selecione um parceiro</option>' +
+    partners.map((partner) => `<option value="${escapeHTML(partner.id)}">${escapeHTML(partner.name)} — ${escapeHTML(partner.category)} (${partner.rate.toLocaleString("pt-BR")}% )</option>`).join("");
+  quoteSelect.innerHTML = '<option value="">Selecione um orçamento</option>' +
+    quotes.map((quote) => {
+      const client = quote.clientName || clients.find((item) => item.id === quote.clientId)?.name || "Sem cliente";
+      return `<option value="${escapeHTML(quote.id)}">${escapeHTML(quote.name)} — ${escapeHTML(client)} · ${formatBRL(quote.price)}</option>`;
+    }).join("");
+  if (partners.some((item) => item.id === selectedPartner)) partnerSelect.value = selectedPartner;
+  if (quotes.some((item) => item.id === selectedQuote)) quoteSelect.value = selectedQuote;
+  updateCommissionPreview();
+}
+function updateCommissionPreview() {
+  const partner = partners.find((item) => item.id === $("#commissionPartner").value);
+  const quote = quotes.find((item) => item.id === $("#commissionQuote").value);
+  const rate = partner ? partner.rate : 0;
+  const price = quote ? Math.max(0, Number(quote.price) || 0) : 0;
+  $("#commissionRatePreview").value = String(rate);
+  $("#commissionAmountPreview").value = formatBRL(Math.round(price * rate) / 100);
+  const closedSale = quote ? findCommissionSale(quote.id) : null;
+  $("#commissionQuoteHint").textContent = quote
+    ? (closedSale
+      ? "A venda já está concluída. Ao salvar, a comissão ficará pendente para pagamento."
+      : "A comissão ficará aguardando até que a oportunidade vinculada seja marcada como “Venda concluída”.")
+    : "Selecione um orçamento para calcular a estimativa.";
+}
+$("#newCommissionBtn").addEventListener("click", openCommissionForm);
+$("#cancelCommissionBtn").addEventListener("click", closeCommissionForm);
+$("#cancelCommissionBtnBottom").addEventListener("click", closeCommissionForm);
+$("#commissionPartner").addEventListener("change", updateCommissionPreview);
+$("#commissionQuote").addEventListener("change", updateCommissionPreview);
+$("#commissionForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const partner = partners.find((item) => item.id === $("#commissionPartner").value);
+  const quote = quotes.find((item) => item.id === $("#commissionQuote").value);
+  if (!partner || !quote) {
+    alert("Selecione um parceiro e um orçamento válido.");
+    return;
+  }
+  const duplicate = commissions.some((item) => item.partnerId === partner.id && item.quoteId === quote.id);
+  if (duplicate) {
+    alert("Já existe uma comissão ou vínculo desse parceiro para este orçamento. Não é permitido duplicar.");
+    return;
+  }
+  const now = new Date().toISOString();
+  const closedSale = findCommissionSale(quote.id);
+  const basePrice = Math.max(0, Number(quote.price) || 0);
+  const record = {
+    id: createId(),
+    partnerId: partner.id,
+    partnerName: partner.name,
+    quoteId: quote.id,
+    quoteName: quote.name,
+    clientName: quote.clientName || clients.find((item) => item.id === quote.clientId)?.name || "",
+    saleId: closedSale?.id || "",
+    rate: partner.rate,
+    basePrice,
+    amount: Math.round(basePrice * partner.rate) / 100,
+    status: closedSale ? "pending" : "awaiting_sale",
+    createdAt: now,
+    dueAt: closedSale ? now : "",
+    paidAt: "",
+    updatedAt: now
+  };
+  commissions = [record, ...commissions];
+  if (!saveCommissions()) {
+    commissions = commissions.filter((item) => item.id !== record.id);
+    return;
+  }
+  closeCommissionForm();
+  renderPartners();
+});
+
+function setCommissionStatus(id, status) {
+  const entry = commissions.find((item) => item.id === id);
+  if (!entry || !["paid", "cancelled"].includes(status)) return;
+  if (entry.status === "paid" || entry.status === "cancelled") return;
+  if (status === "paid" && entry.status !== "pending") {
+    alert("Só é possível marcar como paga uma comissão de uma venda concluída.");
+    return;
+  }
+  const actionText = status === "paid" ? "marcar esta comissão como paga" : "cancelar este vínculo de comissão";
+  if (!confirm(`Deseja ${actionText} de ${entry.partnerName} no orçamento “${entry.quoteName}”?`)) return;
+  const previous = [...commissions];
+  commissions = commissions.map((item) => item.id === id
+    ? { ...item, status, paidAt: status === "paid" ? new Date().toISOString() : "", updatedAt: new Date().toISOString() }
+    : item);
+  if (!saveCommissions()) {
+    commissions = previous;
+    return;
+  }
+  renderPartners();
+}
+
+function renderPartners() {
+  refreshCommissionLinks();
+  const awaiting = commissions.filter((item) => item.status === "awaiting_sale");
+  const pending = commissions.filter((item) => item.status === "pending");
+  const paid = commissions.filter((item) => item.status === "paid");
+  $("#commissionAwaitingTotal").textContent = formatBRL(awaiting.reduce((sum, item) => sum + item.amount, 0));
+  $("#commissionAwaitingCount").textContent = `${awaiting.length} ${awaiting.length === 1 ? "vínculo" : "vínculos"}`;
+  $("#commissionPendingTotal").textContent = formatBRL(pending.reduce((sum, item) => sum + item.amount, 0));
+  $("#commissionPendingCount").textContent = `${pending.length} ${pending.length === 1 ? "comissão" : "comissões"}`;
+  $("#commissionPaidTotal").textContent = formatBRL(paid.reduce((sum, item) => sum + item.amount, 0));
+  $("#commissionPaidCount").textContent = `${paid.length} ${paid.length === 1 ? "comissão" : "comissões"}`;
+
+  const partnerTerm = ($("#partnerSearch").value || "").trim().toLocaleLowerCase("pt-BR");
+  const filteredPartners = partners.filter((item) => `${item.name} ${item.category}`.toLocaleLowerCase("pt-BR").includes(partnerTerm));
+  $("#partnerCount").textContent = `${filteredPartners.length} ${filteredPartners.length === 1 ? "parceiro" : "parceiros"}`;
+  $("#partnerList").innerHTML = filteredPartners.length ? filteredPartners.map((partner) => {
+    const partnerCommissions = commissions.filter((item) => item.partnerId === partner.id);
+    const pendingAmount = partnerCommissions.filter((item) => item.status === "pending").reduce((sum, item) => sum + item.amount, 0);
+    return `<article class="partner-row">
+      <div class="partner-avatar">${escapeHTML(partner.name.slice(0, 2).toLocaleUpperCase("pt-BR"))}</div>
+      <div class="partner-info"><strong>${escapeHTML(partner.name)}</strong><span>${escapeHTML(partner.category)} · ${partner.rate.toLocaleString("pt-BR")}% de comissão</span><small>${partnerCommissions.length} ${partnerCommissions.length === 1 ? "orçamento vinculado" : "orçamentos vinculados"} · ${formatBRL(pendingAmount)} pendentes</small></div>
+      <div class="partner-actions"><button class="icon-button" data-partner-edit="${escapeHTML(partner.id)}">Editar</button><button class="icon-button delete" data-partner-delete="${escapeHTML(partner.id)}">Excluir</button></div>
+    </article>`;
+  }).join("") : '<div class="list-empty">Nenhum parceiro cadastrado. Clique em “+ Novo parceiro” para começar.</div>';
+
+  const term = ($("#commissionSearch").value || "").trim().toLocaleLowerCase("pt-BR");
+  const filteredCommissions = commissions.filter((item) =>
+    `${item.partnerName} ${item.quoteName} ${item.clientName} ${commissionStatusLabels[item.status]}`.toLocaleLowerCase("pt-BR").includes(term)
+  ).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  $("#commissionCount").textContent = filteredCommissions.length
+    ? `${filteredCommissions.length} ${filteredCommissions.length === 1 ? "comissão/vínculo" : "comissões/vínculos"}`
+    : "Nenhuma comissão cadastrada";
+  $("#commissionList").innerHTML = filteredCommissions.length ? filteredCommissions.map((item) => {
+    const statusClass = item.status.replace("_", "-");
+    const actions = item.status === "pending"
+      ? `<button class="button button-primary" data-commission-action="paid" data-commission-id="${escapeHTML(item.id)}">Marcar como paga</button><button class="button button-outline" data-commission-action="cancelled" data-commission-id="${escapeHTML(item.id)}">Cancelar</button>`
+      : (item.status === "awaiting_sale"
+        ? `<button class="button button-outline" data-commission-action="cancelled" data-commission-id="${escapeHTML(item.id)}">Cancelar vínculo</button>`
+        : "");
+    return `<article class="commission-row">
+      <div class="commission-main"><div class="commission-top"><strong>${escapeHTML(item.partnerName || "Parceiro")}</strong><span class="commission-status ${statusClass}">${escapeHTML(commissionStatusLabels[item.status] || item.status)}</span></div>
+      <p>${escapeHTML(item.quoteName || "Orçamento")} · ${escapeHTML(item.clientName || "Sem cliente vinculado")}</p>
+      <div class="commission-values"><span><small>Preço de venda</small><strong>${formatBRL(item.basePrice)}</strong></span><span><small>Percentual</small><strong>${item.rate.toLocaleString("pt-BR")}%</strong></span><span><small>Comissão</small><strong>${formatBRL(item.amount)}</strong></span></div>
+      <small class="commission-date">${item.status === "paid" ? "Paga em " + formatCommissionDate(item.paidAt) : item.status === "pending" ? "Devida desde " + formatCommissionDate(item.dueAt) : "Criada em " + formatCommissionDate(item.createdAt)}</small></div>
+      <div class="commission-actions">${actions}</div>
+    </article>`;
+  }).join("") : '<div class="list-empty">Nenhuma comissão ou vínculo encontrado. Use “+ Vincular orçamento” para associar um parceiro a um orçamento existente.</div>';
+}
+
+$("#partnerSearch").addEventListener("input", () => renderPartners());
+$("#commissionSearch").addEventListener("input", () => renderPartners());
+$("#partnerList").addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-partner-edit]");
+  const deleteButton = event.target.closest("[data-partner-delete]");
+  if (editButton) {
+    const partner = partners.find((item) => item.id === editButton.dataset.partnerEdit);
+    if (partner) openPartnerForm(partner);
+    return;
+  }
+  if (deleteButton) {
+    const partner = partners.find((item) => item.id === deleteButton.dataset.partnerDelete);
+    if (!partner) return;
+    if (commissions.some((item) => item.partnerId === partner.id)) {
+      alert("Este parceiro possui orçamentos vinculados ou comissões no histórico. Para preservar o histórico, não é possível excluí-lo.");
+      return;
+    }
+    if (!confirm(`Deseja excluir o parceiro “${partner.name}”?`)) return;
+    const previous = [...partners];
+    partners = partners.filter((item) => item.id !== partner.id);
+    if (!savePartners()) {
+      partners = previous;
+      return;
+    }
+    renderPartners();
+  }
+});
+$("#commissionList").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-commission-action]");
+  if (button) setCommissionStatus(button.dataset.commissionId, button.dataset.commissionAction);
+});
