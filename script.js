@@ -2165,6 +2165,36 @@ function syncWonSalesToFinance() {
   return true;
 }
 
+let financeCurrentView = "overview";
+
+const financeViewDescriptions = {
+  overview: "Todos os lançamentos do mês, sem duplicar registros.",
+  receivable: "Receitas com saldo pendente ou pagamento parcial. As entradas já quitadas ficam na Visão geral.",
+  payable: "Despesas que ainda precisam ser pagas. Despesas quitadas ficam na Visão geral.",
+  team: "Pagamentos de mão de obra registrados pelo cadastro da Equipe.",
+  commissions: "Comissões já registradas no Financeiro. Comissões aguardando pagamento continuam sendo acompanhadas em Parceiros / Comissões."
+};
+
+function setFinanceView(view) {
+  if (!Object.prototype.hasOwnProperty.call(financeViewDescriptions, view)) return;
+  financeCurrentView = view;
+  document.querySelectorAll("[data-finance-view]").forEach((button) => {
+    const active = button.dataset.financeView === view;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  $("#financeViewHelp").textContent = financeViewDescriptions[view];
+  renderFinance();
+}
+
+function financeEntryMatchesView(entry, view) {
+  if (view === "receivable") return entry.type === "income" && financeOutstandingAmount(entry) > 0;
+  if (view === "payable") return entry.type === "expense" && entry.status !== "paid";
+  if (view === "team") return entry.category === "Mão de obra" || Boolean(entry.teamMemberId);
+  if (view === "commissions") return entry.category === "Comissões" || Boolean(entry.linkedCommissionId);
+  return true;
+}
+
 function renderFinance(searchTerm = $("#financeSearch").value) {
   syncWonSalesToFinance();
   syncPaidCommissionsToFinance();
@@ -2199,7 +2229,7 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
       (entry.status !== "paid" && entry.dueDate.startsWith(month));
     const searchable = `${entry.description} ${entry.category} ${entry.clientName || ""} ${entry.notes || ""}`
       .toLocaleLowerCase("pt-BR");
-    return matchesMonth && searchable.includes(normalizedSearch);
+    return matchesMonth && searchable.includes(normalizedSearch) && financeEntryMatchesView(entry, financeCurrentView);
   }).sort((a, b) => (financeEffectiveDate(b) || "").localeCompare(financeEffectiveDate(a) || ""));
 
   $("#financeCount").textContent = `${filtered.length} ${filtered.length === 1 ? "lançamento" : "lançamentos"}`;
@@ -2207,7 +2237,15 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
   if (filtered.length === 0) {
     list.innerHTML = `<div class="list-empty">${financeEntries.length === 0
       ? "Nenhum lançamento financeiro ainda. Ao concluir uma venda no Funil, ela será adicionada aqui automaticamente. Você também pode clicar em “+ Novo lançamento”."
-      : "Nenhum lançamento encontrado neste mês para essa busca."}</div>`;
+      : financeCurrentView === "receivable"
+        ? "Nenhuma conta a receber encontrada para este mês e busca."
+        : financeCurrentView === "payable"
+          ? "Nenhuma conta a pagar encontrada para este mês e busca."
+          : financeCurrentView === "team"
+            ? "Nenhum pagamento de equipe encontrado para este mês e busca."
+            : financeCurrentView === "commissions"
+              ? "Nenhuma comissão registrada no Financeiro para este mês e busca."
+              : "Nenhum lançamento encontrado neste mês para essa busca."}</div>`;
     return;
   }
 
@@ -2255,6 +2293,9 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
   }).join("");
 }
 
+document.querySelectorAll("[data-finance-view]").forEach((button) => {
+  button.addEventListener("click", () => setFinanceView(button.dataset.financeView));
+});
 $("#newFinanceEntryBtn").addEventListener("click", () => openFinanceForm());
 $("#cancelFinanceBtn").addEventListener("click", closeFinanceForm);
 $("#cancelFinanceBtnBottom").addEventListener("click", closeFinanceForm);
