@@ -2949,8 +2949,8 @@ function updateTeamPaymentFields() {
   $("#teamAmountLabel").textContent = isDaily ? "Valor da diária (R$) *" : "Valor mensal (R$) *";
   $("#teamAmount").placeholder = isDaily ? "Ex.: 150,00 por dia" : "Ex.: 2.500,00 por mês";
   $("#teamPaymentHint").textContent = isDaily
-    ? "Informe o valor de um dia trabalhado. A quantidade de dias será preenchida em cada pagamento na etapa de integração com o Financeiro."
-    : "Informe o valor fixo mensal. Não será necessário informar quantidade de dias no cadastro mensal.";
+    ? "Informe o valor de um dia trabalhado. A quantidade de dias será preenchida ao registrar cada pagamento no Financeiro."
+    : "Informe o valor fixo mensal. No pagamento mensal, o CRM não solicitará a quantidade de dias.";
 }
 
 function openTeamMemberForm(member = null) {
@@ -2979,6 +2979,61 @@ function closeTeamMemberForm() {
   updateTeamPaymentFields();
 }
 
+function updateTeamPaymentPreview() {
+  const memberId = $("#teamPaymentMemberId").value;
+  const member = teamMembers.find((item) => item.id === memberId);
+  if (!member) {
+    $("#teamPaymentCalculated").value = "";
+    return;
+  }
+  if (member.paymentMode === "Mensal") {
+    $("#teamPaymentCalculated").value = member.amount.toFixed(2);
+    $("#teamPaymentHint").textContent = `Pagamento mensal de ${formatBRL(member.amount)} para ${member.name}.`;
+    return;
+  }
+  const days = Number($("#teamPaymentDays").value);
+  if (!Number.isInteger(days) || days < 1 || days > 366) {
+    $("#teamPaymentCalculated").value = "";
+    $("#teamPaymentHint").textContent = `Valor da diária: ${formatBRL(member.amount)}. Informe de 1 a 366 dias trabalhados.`;
+    return;
+  }
+  const total = Math.round(member.amount * days * 100) / 100;
+  $("#teamPaymentCalculated").value = total.toFixed(2);
+  $("#teamPaymentHint").textContent = `${days} dia(s) × ${formatBRL(member.amount)} = ${formatBRL(total)}.`;
+}
+
+function openTeamPaymentForm(member) {
+  if (!member) return;
+  closeTeamMemberForm();
+  const form = $("#teamPaymentForm");
+  form.reset();
+  $("#teamPaymentMemberId").value = member.id;
+  $("#teamPaymentFormTitle").textContent = `Pagamento — ${member.name}`;
+  $("#teamPaymentDate").value = localISODate();
+  const isDaily = member.paymentMode === "Diário";
+  $("#teamPaymentDaysField").hidden = !isDaily;
+  $("#teamPaymentDays").required = isDaily;
+  $("#teamPaymentDays").disabled = !isDaily;
+  $("#teamPaymentDays").value = "";
+  $("#teamPaymentCalculated").value = "";
+  form.hidden = false;
+  updateTeamPaymentPreview();
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (isDaily) $("#teamPaymentDays").focus({ preventScroll: true });
+  else $("#teamPaymentDate").focus({ preventScroll: true });
+}
+
+function closeTeamPaymentForm() {
+  const form = $("#teamPaymentForm");
+  form.hidden = true;
+  form.reset();
+  $("#teamPaymentMemberId").value = "";
+  $("#teamPaymentDaysField").hidden = false;
+  $("#teamPaymentDays").required = false;
+  $("#teamPaymentDays").disabled = false;
+  $("#teamPaymentCalculated").value = "";
+}
+
 function renderTeamMembers() {
   const term = ($("#teamSearch").value || "").trim().toLocaleLowerCase("pt-BR");
   const filtered = teamMembers.filter((member) =>
@@ -2993,6 +3048,7 @@ function renderTeamMembers() {
       <div class="team-info"><strong>${escapeHTML(member.name)}</strong><span>${escapeHTML(member.role)}</span>
         <small>${modeLabel} • ${amountLabel}: ${formatBRL(member.amount)}</small></div>
       <div class="team-actions">
+        <button type="button" class="button button-primary" data-team-pay="${escapeHTML(member.id)}">Registrar pagamento</button>
         <button type="button" class="button button-outline" data-team-edit="${escapeHTML(member.id)}">Editar</button>
         <button type="button" class="button button-danger" data-team-delete="${escapeHTML(member.id)}">Excluir</button>
       </div>
@@ -3005,6 +3061,69 @@ $("#cancelTeamBtn").addEventListener("click", closeTeamMemberForm);
 $("#cancelTeamBtnBottom").addEventListener("click", closeTeamMemberForm);
 $("#teamPaymentMode").addEventListener("change", updateTeamPaymentFields);
 $("#teamSearch").addEventListener("input", renderTeamMembers);
+$("#teamPaymentDays").addEventListener("input", updateTeamPaymentPreview);
+$("#cancelTeamPaymentBtn").addEventListener("click", closeTeamPaymentForm);
+$("#cancelTeamPaymentBtnBottom").addEventListener("click", closeTeamPaymentForm);
+
+$("#teamPaymentForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const member = teamMembers.find((item) => item.id === $("#teamPaymentMemberId").value);
+  if (!member) {
+    alert("Não foi possível localizar a pessoa da equipe. Feche o formulário e tente novamente.");
+    return;
+  }
+  const paymentDate = $("#teamPaymentDate").value;
+  const isDaily = member.paymentMode === "Diário";
+  const days = isDaily ? Number($("#teamPaymentDays").value) : null;
+  if (!paymentDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(paymentDate)) {
+    alert("Informe uma data válida para o pagamento.");
+    $("#teamPaymentDate").focus();
+    return;
+  }
+  if (isDaily && (!Number.isInteger(days) || days < 1 || days > 366)) {
+    alert("Informe a quantidade de dias trabalhados (de 1 a 366).");
+    $("#teamPaymentDays").focus();
+    return;
+  }
+  const amount = Math.round(member.amount * (isDaily ? days : 1) * 100) / 100;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert("O valor calculado do pagamento precisa ser maior que zero.");
+    return;
+  }
+  const now = new Date().toISOString();
+  const paymentEntry = {
+    id: createId(),
+    type: "expense",
+    description: `Pagamento de equipe — ${member.name}`,
+    category: "Mão de obra",
+    amount,
+    paidAmount: 0,
+    payments: [],
+    dueDate: paymentDate,
+    status: "paid",
+    paidDate: paymentDate,
+    clientId: "",
+    clientName: "",
+    notes: `Pessoa: ${member.name} · Função: ${member.role} · Modalidade: ${member.paymentMode}${isDaily ? ` · Dias trabalhados: ${days} · Diária: ${formatBRL(member.amount)}` : ""}`,
+    teamMemberId: member.id,
+    teamMemberName: member.name,
+    teamPaymentMode: member.paymentMode,
+    teamPaymentDays: isDaily ? days : null,
+    teamDailyRate: isDaily ? member.amount : null,
+    createdAt: now,
+    updatedAt: now
+  };
+  const previousEntries = [...financeEntries];
+  financeEntries.unshift(paymentEntry);
+  if (!saveFinanceEntries()) {
+    financeEntries = previousEntries;
+    return;
+  }
+  closeTeamPaymentForm();
+  renderTeamMembers();
+  renderFinance();
+  alert(`Pagamento de ${formatBRL(amount)} registrado no Financeiro para ${member.name}.`);
+});
 
 $("#teamForm").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -3029,8 +3148,14 @@ $("#teamForm").addEventListener("submit", (event) => {
 });
 
 $("#teamMemberList").addEventListener("click", (event) => {
+  const payButton = event.target.closest("[data-team-pay]");
   const editButton = event.target.closest("[data-team-edit]");
   const deleteButton = event.target.closest("[data-team-delete]");
+  if (payButton) {
+    const member = teamMembers.find((item) => item.id === payButton.dataset.teamPay);
+    if (member) openTeamPaymentForm(member);
+    return;
+  }
   if (editButton) {
     const member = teamMembers.find((item) => item.id === editButton.dataset.teamEdit);
     if (member) openTeamMemberForm(member);
