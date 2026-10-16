@@ -959,3 +959,32 @@ textarea {
   .team-info { width: calc(100% - 60px); flex: 1 1 calc(100% - 60px); }
   .team-actions { width: 100%; justify-content: flex-end; padding-top: 8px; border-top: 1px solid var(--border); }
 }
+
+
+/* Indicadores adicionais do Painel inicial */
+.dashboard-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.dashboard-metric-card {
+  padding: 18px;
+}
+.dashboard-metric-card .stat-icon {
+  margin-bottom: 12px;
+}
+.dashboard-metric-card > strong {
+  font-size: clamp(20px, 2vw, 27px);
+}
+@media (max-width: 1200px) {
+  .dashboard-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .dashboard-metrics-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .dashboard-metric-card { padding: 13px; }
+  .dashboard-metric-card .stat-icon { width: 30px; height: 30px; margin-bottom: 10px; }
+  .dashboard-metric-card > strong { font-size: 19px; }
+  .dashboard-metric-card .stat-label { font-size: 10px; }
+  .dashboard-metric-card small { font-size: 9px; }
+}
