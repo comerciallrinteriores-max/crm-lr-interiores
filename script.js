@@ -2621,20 +2621,36 @@ $("#commissionForm").addEventListener("submit", (event) => {
 
 function setCommissionStatus(id, status) {
   const entry = commissions.find((item) => item.id === id);
-  if (!entry || !["paid", "cancelled"].includes(status)) return;
-  if (entry.status === "paid" || entry.status === "cancelled") return;
+  if (!entry || !["paid", "pending", "cancelled"].includes(status)) return;
+  if (entry.status === "cancelled" || entry.status === status) return;
   if (status === "paid" && entry.status !== "pending") {
     alert("Só é possível marcar como paga uma comissão de uma venda concluída.");
     return;
   }
-  const actionText = status === "paid" ? "marcar esta comissão como paga" : "cancelar este vínculo de comissão";
-  if (!confirm(`Deseja ${actionText} de ${entry.partnerName} no orçamento “${entry.quoteName}”?`)) return;
+  if (status === "pending" && entry.status !== "paid") return;
+  const actionText = status === "paid"
+    ? "marcar esta comissão como paga"
+    : status === "pending"
+      ? "voltar esta comissão para pendente"
+      : "cancelar este vínculo de comissão";
+  if (!confirm(`Deseja ${actionText} de ${entry.partnerName} no orçamento “${entry.quoteName}”?${status === "pending" ? "\nO lançamento automático correspondente será removido do Financeiro." : ""}`)) return;
   const previous = [...commissions];
+  const previousFinance = [...financeEntries];
   commissions = commissions.map((item) => item.id === id
     ? { ...item, status, paidAt: status === "paid" ? new Date().toISOString() : "", updatedAt: new Date().toISOString() }
     : item);
+  if (status === "pending") {
+    financeEntries = financeEntries.filter((item) => item.linkedCommissionId !== id);
+    if (!saveFinanceEntries()) {
+      financeEntries = previousFinance;
+      commissions = previous;
+      return;
+    }
+  }
   if (!saveCommissions()) {
     commissions = previous;
+    financeEntries = previousFinance;
+    saveFinanceEntries();
     return;
   }
   if (status === "paid" && !syncPaidCommissionsToFinance()) {
@@ -2643,7 +2659,24 @@ function setCommissionStatus(id, status) {
     return;
   }
   renderPartners();
-  if (status === "paid") renderFinance();
+  if (status === "paid" || status === "pending") renderFinance();
+}
+
+function deleteCommission(id) {
+  const entry = commissions.find((item) => item.id === id);
+  if (!entry) return;
+  if (entry.status === "paid") {
+    alert("Esta comissão já foi paga. Use “Voltar para pendente” antes de excluí-la, para que o lançamento correspondente seja retirado do Financeiro.");
+    return;
+  }
+  if (!confirm(`Deseja excluir o vínculo de ${entry.partnerName} com o orçamento “${entry.quoteName}”? Esta ação não pode ser desfeita.`)) return;
+  const previous = [...commissions];
+  commissions = commissions.filter((item) => item.id !== id);
+  if (!saveCommissions()) {
+    commissions = previous;
+    return;
+  }
+  renderPartners();
 }
 
 function syncPaidCommissionsToFinance() {
@@ -2722,10 +2755,12 @@ function renderPartners() {
   $("#commissionList").innerHTML = filteredCommissions.length ? filteredCommissions.map((item) => {
     const statusClass = item.status.replace("_", "-");
     const actions = item.status === "pending"
-      ? `<button class="button button-primary" data-commission-action="paid" data-commission-id="${escapeHTML(item.id)}">Marcar como paga</button><button class="button button-outline" data-commission-action="cancelled" data-commission-id="${escapeHTML(item.id)}">Cancelar</button>`
+      ? `<button class="button button-primary" data-commission-action="paid" data-commission-id="${escapeHTML(item.id)}">Marcar como paga</button><button class="button button-outline" data-commission-action="cancelled" data-commission-id="${escapeHTML(item.id)}">Cancelar</button><button class="button button-outline" data-commission-delete="${escapeHTML(item.id)}">Excluir vínculo</button>`
       : (item.status === "awaiting_sale"
-        ? `<button class="button button-outline" data-commission-action="cancelled" data-commission-id="${escapeHTML(item.id)}">Cancelar vínculo</button>`
-        : "");
+        ? `<button class="button button-outline" data-commission-action="cancelled" data-commission-id="${escapeHTML(item.id)}">Cancelar vínculo</button><button class="button button-outline" data-commission-delete="${escapeHTML(item.id)}">Excluir vínculo</button>`
+        : (item.status === "paid"
+          ? `<button class="button button-outline" data-commission-action="pending" data-commission-id="${escapeHTML(item.id)}">Voltar para pendente</button>`
+          : `<button class="button button-outline" data-commission-delete="${escapeHTML(item.id)}">Excluir vínculo</button>`));
     return `<article class="commission-row">
       <div class="commission-main"><div class="commission-top"><strong>${escapeHTML(item.partnerName || "Parceiro")}</strong><span class="commission-status ${statusClass}">${escapeHTML(commissionStatusLabels[item.status] || item.status)}</span></div>
       <p>${escapeHTML(item.quoteName || "Orçamento")} · ${escapeHTML(item.clientName || "Sem cliente vinculado")}</p>
@@ -2764,6 +2799,11 @@ $("#partnerList").addEventListener("click", (event) => {
   }
 });
 $("#commissionList").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-commission-action]");
-  if (button) setCommissionStatus(button.dataset.commissionId, button.dataset.commissionAction);
+  const button = event.target.closest("[data-commission-action], [data-commission-delete]");
+  if (!button) return;
+  if (button.hasAttribute("data-commission-delete")) {
+    deleteCommission(button.dataset.commissionDelete);
+    return;
+  }
+  setCommissionStatus(button.dataset.commissionId, button.dataset.commissionAction);
 });
