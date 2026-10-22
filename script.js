@@ -3188,7 +3188,86 @@ function openTeamMemberForm(member = null) {
     $("#teamPaymentMode").value = member.paymentMode;
     $("#teamAmount").value = String(member.amount);
   }
-  updateTeamPaymentFields();
+  // Renderiza o painel inicial assim que o CRM termina de carregar após o desbloqueio.
+renderDashboard();
+updateTeamPaymentFields();
+
+// Cadastro rápido de cliente dentro do formulário de orçamento.
+const quoteClientDialog = $("#quoteClientDialog");
+const quoteQuickClientForm = $("#quoteQuickClientForm");
+
+function closeQuoteClientDialog() {
+  if (quoteClientDialog.open) quoteClientDialog.close();
+  quoteQuickClientForm.reset();
+  $("#quoteQuickClientStatus").textContent = "";
+}
+
+$("#newClientFromQuoteBtn").addEventListener("click", () => {
+  quoteQuickClientForm.reset();
+  $("#quoteQuickClientStatus").textContent = "";
+  quoteClientDialog.showModal();
+  $("#quoteQuickClientName").focus();
+});
+
+$("#closeQuoteClientDialogBtn").addEventListener("click", closeQuoteClientDialog);
+$("#cancelQuoteClientDialogBtn").addEventListener("click", closeQuoteClientDialog);
+
+quoteQuickClientForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const name = $("#quoteQuickClientName").value.trim();
+  const phone = $("#quoteQuickClientPhone").value.trim();
+  const email = $("#quoteQuickClientEmail").value.trim();
+  const source = $("#quoteQuickClientSource").value;
+  const address = $("#quoteQuickClientAddress").value.trim();
+
+  if (!name || !phone) {
+    $("#quoteQuickClientStatus").textContent = "Preencha o nome e o telefone do cliente.";
+    return;
+  }
+
+  const normalizePhone = (value) => value.replace(/\D/g, "");
+  const normalizedPhone = normalizePhone(phone);
+  const existingClient = clients.find((client) =>
+    normalizedPhone && normalizePhone(client.phone || "") === normalizedPhone
+  );
+
+  if (existingClient) {
+    const reuse = confirm(
+      \`Já existe um cliente chamado "\${existingClient.name}" com esse telefone. Deseja usar o cadastro existente neste orçamento?\`
+    );
+    if (!reuse) return;
+    renderClientOptions(existingClient.id);
+    closeQuoteClientDialog();
+    $("#quoteClient").focus();
+    return;
+  }
+
+  const previousClients = [...clients];
+  const now = new Date().toISOString();
+  const clientData = {
+    id: createId(),
+    name,
+    phone,
+    email,
+    source,
+    address,
+    notes: "",
+    createdAt: now,
+    updatedAt: now
+  };
+
+  clients.unshift(clientData);
+  if (!saveClients()) {
+    clients = previousClients;
+    return;
+  }
+
+  renderClientOptions(clientData.id);
+  renderDashboard();
+  closeQuoteClientDialog();
+  $("#quoteClient").focus();
+});
   form.hidden = false;
   form.scrollIntoView({ behavior: "smooth", block: "start" });
   $("#teamMemberName").focus({ preventScroll: true });
