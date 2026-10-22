@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#173d32">
   <title>CRM | LR Interiores</title>
-  <link rel="stylesheet" href="style.css?v=20261016-dashboard2">
+  <link rel="stylesheet" href="style.css?v=20261022-client-history1">
   <link rel="stylesheet" href="orcamentos.css?v=20261022-quote-client1">
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
   <link rel="stylesheet" href="producao.css?v=20261016-production2">
   <link rel="stylesheet" href="financeiro.css?v=20261016-views1">
   <link rel="stylesheet" href="marketing.css?v=20261015-1">
-  <script type="module" src="firebase-auth.js?v=10"></script>
+  <script type="module" src="firebase-auth.js?v=11"></script>
   <script type="module" src="idle-lock.js?v=2"></script>
   <style>[hidden] { display: none !important; }</style>
 </head>
@@ -318,6 +318,19 @@
           </div>
           <div id="clientList" class="client-list"></div>
         </div>
+
+        <dialog id="clientHistoryDialog" class="client-history-dialog" aria-labelledby="clientHistoryTitle">
+          <div class="client-history-dialog-content">
+            <div class="form-heading">
+              <div>
+                <h2 id="clientHistoryTitle">Histórico do cliente</h2>
+                <p>Orçamentos, vendas, produção, financeiro e comissões vinculados.</p>
+              </div>
+              <button type="button" class="button button-outline" id="closeClientHistoryBtn">Fechar</button>
+            </div>
+            <div id="clientHistoryContent" class="client-history-content"></div>
+          </div>
+        </dialog>
       </section>
 
       <section class="page" id="page-orcamentos">
