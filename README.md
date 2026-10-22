@@ -7,9 +7,9 @@ CRM interno da LR Interiores para organizar clientes, orçamentos, oportunidades
 ## Módulos do sistema
 
 - **Painel inicial:** resumo de clientes, orçamentos, vendas em andamento e valores recebidos no mês; atalhos para clientes, próximos contatos e prazos de produção. O painel redesenha os dados após salvamentos nos módulos, ao voltar para a aba/janela e periodicamente enquanto estiver aberto (a cada 30 segundos, sem buscar dados extras no Firebase).
-- **Clientes:** cadastro e pesquisa de clientes, com telefone/WhatsApp, e-mail, origem do contato, endereço e observações.
-- **Orçamentos e custos:** cadastro de projetos/orçamentos, vínculo opcional com cliente e estimativa de custos, lucro e margem. É possível cadastrar um cliente rapidamente dentro do próprio formulário de orçamento; se o telefone já estiver cadastrado, o CRM oferece reutilizar o cliente existente.
-- **Funil de vendas:** acompanhamento das oportunidades comerciais e das etapas de venda.
+- **Clientes:** cadastro e pesquisa de clientes, com telefone/WhatsApp, e-mail, origem do contato, endereço e observações; histórico unificado dos orçamentos, vendas, produção, financeiro e comissões vinculados.
+- **Orçamentos e custos:** cadastro de projetos/orçamentos, vínculo opcional com cliente e estimativa de custos, lucro e margem. É possível cadastrar um cliente rapidamente dentro do próprio formulário de orçamento; se o telefone já estiver cadastrado, o CRM oferece reutilizar o cliente existente. Orçamentos podem ser duplicados como rascunho independente e orçamentos aprovados podem gerar uma venda vinculada, evitando duplicação de vendas.
+- **Funil de vendas:** acompanhamento das oportunidades comerciais e das etapas de venda. Vendas concluídas podem iniciar uma ordem de produção com cliente e orçamento já vinculados, sem salvar automaticamente a ordem antes da conferência dos dados.
 - **Produção e entregas:** ordens de produção, acompanhamento de projetos, prazos e calendário.
 - **Financeiro:** lançamentos financeiros, incluindo despesas/receitas e acompanhamento de pagamentos.
 - **Parceiros / Comissões:** cadastro de parceiros, vínculo com orçamentos e controle de comissões. Comissões pagas podem gerar lançamento correspondente no Financeiro.

@@ -407,6 +407,14 @@ function renderClients(searchTerm = "") {
         <button
           type="button"
           class="icon-button"
+          data-action="history"
+          data-id="${escapeHTML(client.id)}"
+          aria-label="Ver histórico de ${escapeHTML(client.name)}"
+        >Histórico</button>
+
+        <button
+          type="button"
+          class="icon-button"
           data-action="edit"
           data-id="${escapeHTML(client.id)}"
           aria-label="Editar ${escapeHTML(client.name)}"
@@ -469,6 +477,94 @@ function linkedRecordsForClient(clientId) {
   return { quotes: clientQuotes, sales: clientSales, production: clientProduction, finance: clientFinance, commissions: clientCommissions };
 }
 
+function formatHistoryDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString("pt-BR");
+}
+
+function openClientHistory(client) {
+  const related = linkedRecordsForClient(client.id);
+  const salesStagesForHistory = typeof salesStages !== "undefined" ? salesStages : [];
+  const productionStatusesForHistory = typeof productionStatuses !== "undefined" ? productionStatuses : [];
+  const sections = [
+    {
+      title: "Orçamentos",
+      items: related.quotes.map((item) => ({
+        name: item.name || "Orçamento",
+        detail: `${item.status || "Rascunho"} · ${formatBRL(item.price)}`,
+        date: item.updatedAt || item.createdAt
+      }))
+    },
+    {
+      title: "Vendas e oportunidades",
+      items: related.sales.map((item) => ({
+        name: item.title || "Oportunidade",
+        detail: `${salesStagesForHistory.find((stage) => stage.id === item.stage)?.title || item.stage || "Sem etapa"} · ${formatBRL(item.expectedValue)}`,
+        date: item.updatedAt || item.createdAt
+      }))
+    },
+    {
+      title: "Produção",
+      items: related.production.map((item) => ({
+        name: item.title || "Projeto",
+        detail: `${productionStatusesForHistory.find((status) => status.id === item.status)?.title || item.status || "Sem status"} · Prazo: ${formatHistoryDate(item.deadline) || "não definido"}`,
+        date: item.updatedAt || item.createdAt
+      }))
+    },
+    {
+      title: "Financeiro",
+      items: related.finance.map((item) => ({
+        name: item.description || item.title || item.name || "Lançamento financeiro",
+        detail: `${formatBRL(Number(item.amount ?? item.value ?? item.total ?? 0))} · ${item.status || "registrado"}`,
+        date: item.dueDate || item.date || item.updatedAt || item.createdAt
+      }))
+    },
+    {
+      title: "Comissões",
+      items: related.commissions.map((item) => ({
+        name: item.partnerName || item.partner || item.name || "Comissão vinculada",
+        detail: formatBRL(Number(item.amount ?? item.commissionAmount ?? item.value ?? 0)),
+        date: item.updatedAt || item.createdAt
+      }))
+    }
+  ];
+
+  $("#clientHistoryTitle").textContent = `Histórico — ${client.name}`;
+  $("#clientHistoryContent").innerHTML = sections.map((section) => `
+    <section class="client-history-section">
+      <h3>${escapeHTML(section.title)} <span>${section.items.length}</span></h3>
+      ${section.items.length ? `
+        <ul class="client-history-list">
+          ${section.items.map((item) => `
+            <li class="client-history-item">
+              <div><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(item.detail)}</small></div>
+              ${item.date ? `<time>${escapeHTML(formatHistoryDate(item.date))}</time>` : ""}
+            </li>
+          `).join("")}
+        </ul>
+      ` : '<p class="client-history-empty">Nenhum registro vinculado.</p>'}
+    </section>
+  `).join("");
+
+  const dialog = $("#clientHistoryDialog");
+  if (typeof dialog.showModal === "function") dialog.showModal();
+  else dialog.setAttribute("open", "");
+}
+
+$("#closeClientHistoryBtn").addEventListener("click", () => {
+  const dialog = $("#clientHistoryDialog");
+  if (typeof dialog.close === "function") dialog.close();
+  else dialog.removeAttribute("open");
+});
+
+$("#clientHistoryDialog").addEventListener("click", (event) => {
+  if (event.target !== event.currentTarget) return;
+  const dialog = $("#clientHistoryDialog");
+  if (typeof dialog.close === "function") dialog.close();
+  else dialog.removeAttribute("open");
+});
+
 function explainBlockedDelete(type, label, related) {
   const details = [];
   if (related.quotes?.length) details.push(`${related.quotes.length} orçamento(s)`);
@@ -488,6 +584,11 @@ $("#clientList").addEventListener("click", (event) => {
   );
 
   if (!client) return;
+
+  if (button.dataset.action === "history") {
+    openClientHistory(client);
+    return;
+  }
 
   if (button.dataset.action === "edit") {
     openClientForm(client);
@@ -1112,6 +1213,14 @@ function renderQuotes(
         </div>
 
         <div class="quote-row-actions">
+          ${quote.status === "Aprovado" && !sales.some((sale) => sale.quoteId === quote.id) ? `
+            <button type="button" class="button button-primary" data-quote-convert="${escapeHTML(quote.id)}">Gerar venda</button>
+          ` : ""}
+          <button
+            type="button"
+            class="button button-outline"
+            data-quote-duplicate="${escapeHTML(quote.id)}"
+          >Duplicar</button>
           <button
             type="button"
             class="button button-outline"
@@ -1134,8 +1243,79 @@ $("#quoteSearch").addEventListener("input", (event) =>
 );
 
 $("#quoteList").addEventListener("click", (event) => {
+  const convertButton = event.target.closest("[data-quote-convert]");
+  const duplicateButton = event.target.closest("[data-quote-duplicate]");
   const editButton = event.target.closest("[data-quote-edit]");
   const deleteButton = event.target.closest("[data-quote-delete]");
+
+  if (duplicateButton) {
+    const quote = quotes.find((item) => item.id === duplicateButton.dataset.quoteDuplicate);
+    if (!quote) return;
+    const now = new Date().toISOString();
+    const previousQuotes = [...quotes];
+    quotes.unshift({
+      ...quote,
+      id: createId(),
+      name: `Cópia de ${quote.name}`,
+      status: "Rascunho",
+      deadline: "",
+      createdAt: now,
+      updatedAt: now
+    });
+    if (!saveQuotes()) {
+      quotes = previousQuotes;
+      return;
+    }
+    renderQuotes();
+    renderDashboard();
+    alert("Cópia criada como rascunho. O orçamento original foi preservado.");
+    return;
+  }
+
+  if (convertButton) {
+    const quote = quotes.find((item) => item.id === convertButton.dataset.quoteConvert);
+    if (!quote) return;
+    if (quote.status !== "Aprovado") {
+      alert("Só é possível gerar uma venda a partir de um orçamento aprovado.");
+      return;
+    }
+    const existingSale = sales.find((sale) => sale.quoteId === quote.id);
+    if (existingSale) {
+      alert("Este orçamento já está vinculado a uma venda no Funil.");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const previousSales = [...sales];
+    sales.unshift({
+      id: createId(),
+      title: quote.name,
+      stage: "won",
+      clientId: quote.clientId || "",
+      clientName: quote.clientName || clients.find((item) => item.id === quote.clientId)?.name || "",
+      quoteId: quote.id,
+      quoteName: quote.name,
+      nextAction: "",
+      followupDate: "",
+      expectedValue: Math.max(0, Number(quote.price) || 0),
+      notes: "Venda criada a partir do orçamento aprovado.",
+      createdAt: now,
+      updatedAt: now
+    });
+    if (!saveSales()) {
+      sales = previousSales;
+      return;
+    }
+
+    const financeSynced = syncWonSalesToFinance();
+    renderSales();
+    renderQuotes();
+    renderDashboard();
+    alert(financeSynced
+      ? "Venda criada e integração com o Financeiro conferida. Registre os recebimentos conforme o cliente pagar."
+      : "A venda foi criada, mas o Financeiro não pôde ser atualizado agora. Confira a área Financeiro antes de registrar pagamentos.");
+    return;
+  }
 
   if (editButton) {
     const quote = quotes.find(
@@ -1458,6 +1638,9 @@ function renderSales(searchTerm = $("#salesSearch").value) {
                 <label class="sales-move-label">Mover para
                   <select data-sale-stage="${escapeHTML(sale.id)}" aria-label="Mover ${escapeHTML(sale.title)} para outra etapa">${stageOptions}</select>
                 </label>
+                ${sale.stage === "won" && !productionOrders.some((order) => order.saleId === sale.id) ? `
+                  <button type="button" class="button button-primary" data-sale-create-production="${escapeHTML(sale.id)}">Criar ordem de produção</button>
+                ` : ""}
                 <button type="button" class="button button-outline sales-delete" data-sale-delete="${escapeHTML(sale.id)}">Excluir</button>
               </article>
             `;
@@ -1471,8 +1654,25 @@ function renderSales(searchTerm = $("#salesSearch").value) {
 $("#salesSearch").addEventListener("input", (event) => renderSales(event.target.value));
 
 $("#salesBoard").addEventListener("click", (event) => {
+  const createProductionButton = event.target.closest("[data-sale-create-production]");
   const editButton = event.target.closest("[data-sale-edit]");
   const deleteButton = event.target.closest("[data-sale-delete]");
+
+  if (createProductionButton) {
+    const sale = sales.find((item) => item.id === createProductionButton.dataset.saleCreateProduction);
+    if (!sale || sale.stage !== "won") return;
+    if (productionOrders.some((order) => order.saleId === sale.id)) {
+      alert("Esta venda já possui uma ordem de produção vinculada.");
+      renderSales();
+      return;
+    }
+    openProductionForm();
+    renderProductionOptions(sale.id, sale.clientId || "", sale.quoteId || "");
+    $("#productionTitle").value = sale.title || sale.quoteName || "";
+    $("#productionStatus").value = "pending";
+    $("#productionFormTitle").textContent = "Nova produção a partir da venda";
+    return;
+  }
 
   if (editButton) {
     const sale = sales.find((item) => item.id === editButton.dataset.saleEdit);
