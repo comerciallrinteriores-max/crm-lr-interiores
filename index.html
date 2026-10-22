@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#173d32">
   <title>CRM | LR Interiores</title>
   <link rel="stylesheet" href="style.css?v=20261016-dashboard2">
-  <link rel="stylesheet" href="orcamentos.css?v=20261015-2">
+  <link rel="stylesheet" href="orcamentos.css?v=20261022-quote-client1">
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
   <link rel="stylesheet" href="producao.css?v=20261016-production2">
   <link rel="stylesheet" href="financeiro.css?v=20261016-views1">
@@ -351,10 +351,13 @@
             <label>Nome do projeto / produto *
               <input id="quoteName" required maxlength="150" placeholder="Ex.: Expositor de esmaltes MDF branco">
             </label>
-            <label>Cliente
-              <select id="quoteClient">
-                <option value="">Sem cliente vinculado</option>
-              </select>
+            <label class="quote-client-label">Cliente
+              <div class="quote-client-picker">
+                <select id="quoteClient">
+                  <option value="">Sem cliente vinculado</option>
+                </select>
+                <button type="button" class="button button-outline" id="newClientFromQuoteBtn">+ Cadastrar</button>
+              </div>
             </label>
             <label>Status do orçamento
               <select id="quoteStatus">
@@ -438,6 +441,52 @@
           </div>
           <div id="quoteList" class="quote-list"></div>
         </div>
+
+        <dialog id="quoteClientDialog" class="quote-client-dialog" aria-labelledby="quoteClientDialogTitle">
+          <form id="quoteQuickClientForm" class="quote-client-dialog-form">
+            <div class="form-heading">
+              <div>
+                <h2 id="quoteClientDialogTitle">Cadastrar cliente</h2>
+                <p>Cadastre aqui e ele já ficará selecionado neste orçamento.</p>
+              </div>
+              <button type="button" class="button button-outline" id="closeQuoteClientDialogBtn">Fechar</button>
+            </div>
+            <div class="form-grid">
+              <label>Nome completo *
+                <input id="quoteQuickClientName" required maxlength="120" autocomplete="name" placeholder="Nome do cliente">
+              </label>
+              <label>Telefone / WhatsApp *
+                <input id="quoteQuickClientPhone" required maxlength="30" autocomplete="tel" placeholder="(00) 00000-0000">
+              </label>
+              <label>E-mail
+                <input id="quoteQuickClientEmail" type="email" maxlength="150" autocomplete="email" placeholder="cliente@email.com">
+              </label>
+              <label>Origem do contato
+                <select id="quoteQuickClientSource">
+                  <option value="">Selecione</option>
+                  <option>Instagram</option>
+                  <option>Facebook</option>
+                  <option>Google</option>
+                  <option>Indicação</option>
+                  <option>Mercado Livre</option>
+                  <option>Amazon</option>
+                  <option>Shopee</option>
+                  <option>TikTok Shop</option>
+                  <option>WhatsApp</option>
+                  <option>Outro</option>
+                </select>
+              </label>
+              <label class="full-width">Endereço
+                <input id="quoteQuickClientAddress" maxlength="250" autocomplete="street-address" placeholder="Cidade, bairro e endereço">
+              </label>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="button button-outline" id="cancelQuoteClientDialogBtn">Cancelar</button>
+              <button type="submit" class="button button-primary">Salvar e selecionar cliente</button>
+            </div>
+            <p id="quoteQuickClientStatus" role="status" aria-live="polite"></p>
+          </form>
+        </dialog>
       </section>
 
       <section class="page" id="page-vendas">

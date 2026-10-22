@@ -35,9 +35,15 @@ function loadClients() {
   }
 }
 
+function refreshDashboardAfterSave() {
+  // Atualiza os dados do painel imediatamente após qualquer salvamento local.
+  if (typeof renderDashboard === "function") renderDashboard();
+}
+
 function saveClients() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
+    refreshDashboardAfterSave();
     return true;
   } catch (error) {
     console.error("Não foi possível salvar os clientes:", error);
@@ -96,6 +102,7 @@ function saveQuotes() {
       JSON.stringify(quotes)
     );
     if (typeof refreshCommissionLinks === "function") refreshCommissionLinks();
+    refreshDashboardAfterSave();
     return true;
   } catch (error) {
     console.error("Não foi possível salvar os orçamentos:", error);
@@ -1226,6 +1233,7 @@ function saveSales() {
   try {
     localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(sales));
     if (typeof refreshCommissionLinks === "function") refreshCommissionLinks();
+    refreshDashboardAfterSave();
     return true;
   } catch (error) {
     console.error("Não foi possível salvar o funil de vendas:", error);
@@ -1577,6 +1585,7 @@ function loadProductionOrders() {
 function saveProductionOrders() {
   try {
     localStorage.setItem(PRODUCTION_STORAGE_KEY, JSON.stringify(productionOrders));
+    refreshDashboardAfterSave();
     return true;
   } catch (error) {
     console.error("Não foi possível salvar a produção:", error);
@@ -2170,6 +2179,7 @@ function loadFinanceEntries() {
 function saveFinanceEntries() {
   try {
     localStorage.setItem(FINANCE_STORAGE_KEY, JSON.stringify(financeEntries));
+    refreshDashboardAfterSave();
     return true;
   } catch (error) {
     console.error("Não foi possível salvar os lançamentos financeiros:", error);
@@ -2663,6 +2673,7 @@ function loadPartners() {
 function savePartners() {
   try {
     localStorage.setItem(PARTNERS_STORAGE_KEY, JSON.stringify(partners));
+    refreshDashboardAfterSave();
     return true;
   } catch (error) {
     console.error("Não foi possível salvar os parceiros:", error);
@@ -2693,6 +2704,7 @@ function loadCommissions() {
 function saveCommissions() {
   try {
     localStorage.setItem(COMMISSIONS_STORAGE_KEY, JSON.stringify(commissions));
+    refreshDashboardAfterSave();
     return true;
   } catch (error) {
     console.error("Não foi possível salvar as comissões:", error);
@@ -3155,6 +3167,7 @@ function loadTeamMembers() {
 function saveTeamMembers() {
   try {
     localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(teamMembers));
+    refreshDashboardAfterSave();
     return true;
   } catch (error) {
     console.error("Não foi possível salvar a equipe:", error);
@@ -3188,7 +3201,8 @@ function openTeamMemberForm(member = null) {
     $("#teamPaymentMode").value = member.paymentMode;
     $("#teamAmount").value = String(member.amount);
   }
-  updateTeamPaymentFields();
+    updateTeamPaymentFields();
+
   form.hidden = false;
   form.scrollIntoView({ behavior: "smooth", block: "start" });
   $("#teamMemberName").focus({ preventScroll: true });
@@ -3397,3 +3411,101 @@ $("#teamMemberList").addEventListener("click", (event) => {
 });
 
 updateTeamPaymentFields();
+// Renderiza o painel inicial assim que o CRM termina de carregar após o desbloqueio.
+renderDashboard();
+
+// Cadastro rápido de cliente dentro do formulário de orçamento.
+const quoteClientDialog = $("#quoteClientDialog");
+const quoteQuickClientForm = $("#quoteQuickClientForm");
+
+function closeQuoteClientDialog() {
+  if (quoteClientDialog.open) quoteClientDialog.close();
+  quoteQuickClientForm.reset();
+  $("#quoteQuickClientStatus").textContent = "";
+}
+
+$("#newClientFromQuoteBtn").addEventListener("click", () => {
+  quoteQuickClientForm.reset();
+  $("#quoteQuickClientStatus").textContent = "";
+  quoteClientDialog.showModal();
+  $("#quoteQuickClientName").focus();
+});
+
+$("#closeQuoteClientDialogBtn").addEventListener("click", closeQuoteClientDialog);
+$("#cancelQuoteClientDialogBtn").addEventListener("click", closeQuoteClientDialog);
+
+quoteQuickClientForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const name = $("#quoteQuickClientName").value.trim();
+  const phone = $("#quoteQuickClientPhone").value.trim();
+  const email = $("#quoteQuickClientEmail").value.trim();
+  const source = $("#quoteQuickClientSource").value;
+  const address = $("#quoteQuickClientAddress").value.trim();
+
+  if (!name || !phone) {
+    $("#quoteQuickClientStatus").textContent = "Preencha o nome e o telefone do cliente.";
+    return;
+  }
+
+  const normalizePhone = (value) => value.replace(/\D/g, "");
+  const normalizedPhone = normalizePhone(phone);
+  const existingClient = clients.find((client) =>
+    normalizedPhone && normalizePhone(client.phone || "") === normalizedPhone
+  );
+
+  if (existingClient) {
+    const reuse = confirm(
+      "Já existe um cliente chamado \"" + existingClient.name +
+      "\" com esse telefone. Deseja usar o cadastro existente neste orçamento?"
+    );
+    if (!reuse) return;
+    renderClientOptions(existingClient.id);
+    closeQuoteClientDialog();
+    $("#quoteClient").focus();
+    return;
+  }
+
+  const previousClients = [...clients];
+  const now = new Date().toISOString();
+  const clientData = {
+    id: createId(),
+    name,
+    phone,
+    email,
+    source,
+    address,
+    notes: "",
+    createdAt: now,
+    updatedAt: now
+  };
+
+  clients.unshift(clientData);
+  if (!saveClients()) {
+    clients = previousClients;
+    return;
+  }
+
+  renderClientOptions(clientData.id);
+  renderDashboard();
+  closeQuoteClientDialog();
+  $("#quoteClient").focus();
+});
+// Mantém o painel atualizado ao retornar à aba e faz uma verificação leve enquanto ele estiver aberto.
+// Não consulta o Firebase em intervalos: apenas redesenha os dados já carregados em memória.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && $("#page-dashboard")?.classList.contains("active")) {
+    renderDashboard();
+  }
+});
+
+window.addEventListener("focus", () => {
+  if ($("#page-dashboard")?.classList.contains("active")) renderDashboard();
+});
+
+window.setInterval(() => {
+  if (!document.hidden && $("#page-dashboard")?.classList.contains("active")) {
+    renderDashboard();
+  }
+}, 30000);
+
