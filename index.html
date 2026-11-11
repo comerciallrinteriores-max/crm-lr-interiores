@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#173d32">
   <title>CRM | LR Interiores</title>
-  <link rel="stylesheet" href="style.css?v=20261022-client-history1">
+  <link rel="stylesheet" href="style.css?v=20261111-menu-groups1">
   <link rel="stylesheet" href="orcamentos.css?v=20261022-quote-client1">
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
   <link rel="stylesheet" href="producao.css?v=20261016-production2">
@@ -60,25 +60,33 @@
       <p class="menu-label">MENU PRINCIPAL</p>
       <nav class="menu" aria-label="Navegação principal">
         <div class="menu-group">
-          <p class="menu-group-title">VISÃO GERAL</p>
-          <button class="nav-item active" data-page="dashboard">⌂ <span>Painel inicial</span></button>
+          <button class="menu-group-title" type="button" aria-expanded="true" aria-controls="menu-overview">VISÃO GERAL <span class="menu-group-chevron" aria-hidden="true">⌄</span></button>
+          <div class="menu-group-items" id="menu-overview">
+            <button class="nav-item active" data-page="dashboard">⌂ <span>Painel inicial</span></button>
+          </div>
         </div>
         <div class="menu-group">
-          <p class="menu-group-title">COMERCIAL</p>
-          <button class="nav-item" data-page="clientes">♙ <span>Clientes</span></button>
-          <button class="nav-item" data-page="orcamentos">▤ <span>Orçamentos</span></button>
-          <button class="nav-item" data-page="vendas">↗ <span>Funil de vendas</span></button>
-          <button class="nav-item" data-page="marketing">◎ <span>Marketing</span></button>
-          <button class="nav-item" data-page="parceiros">♧ <span>Parceiros / Comissões</span></button>
+          <button class="menu-group-title" type="button" aria-expanded="true" aria-controls="menu-commercial">COMERCIAL <span class="menu-group-chevron" aria-hidden="true">⌄</span></button>
+          <div class="menu-group-items" id="menu-commercial">
+            <button class="nav-item" data-page="clientes">♙ <span>Clientes</span></button>
+            <button class="nav-item" data-page="orcamentos">▤ <span>Orçamentos</span></button>
+            <button class="nav-item" data-page="vendas">↗ <span>Funil de vendas</span></button>
+            <button class="nav-item" data-page="marketing">◎ <span>Marketing</span></button>
+            <button class="nav-item" data-page="parceiros">♧ <span>Parceiros / Comissões</span></button>
+          </div>
         </div>
-        <div class="menu-group">
-          <p class="menu-group-title">OPERAÇÃO</p>
-          <button class="nav-item" data-page="producao">⚒ <span>Produção e entregas</span></button>
-          <button class="nav-item" data-page="equipe">♙ <span>Equipe</span></button>
+        <div class="menu-group is-collapsed">
+          <button class="menu-group-title" type="button" aria-expanded="false" aria-controls="menu-operations">OPERAÇÃO <span class="menu-group-chevron" aria-hidden="true">⌄</span></button>
+          <div class="menu-group-items" id="menu-operations">
+            <button class="nav-item" data-page="producao">⚒ <span>Produção e entregas</span></button>
+            <button class="nav-item" data-page="equipe">♙ <span>Equipe</span></button>
+          </div>
         </div>
-        <div class="menu-group">
-          <p class="menu-group-title">FINANCEIRO</p>
-          <button class="nav-item" data-page="financeiro">R$ <span>Financeiro</span></button>
+        <div class="menu-group is-collapsed">
+          <button class="menu-group-title" type="button" aria-expanded="false" aria-controls="menu-finance">FINANCEIRO <span class="menu-group-chevron" aria-hidden="true">⌄</span></button>
+          <div class="menu-group-items" id="menu-finance">
+            <button class="nav-item" data-page="financeiro">R$ <span>Financeiro</span></button>
+          </div>
         </div>
       </nav>
       <div class="sidebar-bottom">
