@@ -22,7 +22,8 @@ const stores = {
   "lr-interiores-producao-v1": "producao",
   "lr-interiores-parceiros-v1": "parceiros",
   "lr-interiores-comissoes-v1": "comissoes",
-  "lr-interiores-equipe-v1": "equipe"
+  "lr-interiores-equipe-v1": "equipe",
+  "lr-interiores-fornecedores-v1": "fornecedores"
 };
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
