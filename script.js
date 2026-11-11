@@ -131,7 +131,7 @@ function navigateTo(pageName) {
     page.classList.remove("active")
   );
 
-  $$(".nav-item").forEach((button) =>
+  $$$(".nav-item").forEach((button) =>
     button.classList.remove("active")
   );
 
@@ -168,7 +168,7 @@ function navigateTo(pageName) {
   if (pageName === "parceiros") renderPartners();
 }
 
-$(".menu-group-title").forEach((button) => {
+$$(".menu-group-title").forEach((button) => {
   button.addEventListener("click", () => {
     const group = button.closest(".menu-group");
     if (!group) return;
@@ -177,7 +177,7 @@ $(".menu-group-title").forEach((button) => {
   });
 });
 
-$(".nav-item").forEach((button) => {
+$$(".nav-item").forEach((button) => {
   button.addEventListener("click", () =>
     navigateTo(button.dataset.page)
   );
