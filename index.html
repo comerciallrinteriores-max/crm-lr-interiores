@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#173d32">
   <title>CRM | LR Interiores</title>
-  <link rel="stylesheet" href="style.css?v=20261111-suppliers1">
+  <link rel="stylesheet" href="style.css?v=20261111-stock1">
   <link rel="stylesheet" href="orcamentos.css?v=20261022-quote-client1">
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
   <link rel="stylesheet" href="producao.css?v=20261016-production2">
@@ -81,6 +81,7 @@
             <button class="nav-item" data-page="producao">⚒ <span>Produção e entregas</span></button>
             <button class="nav-item" data-page="equipe">♙ <span>Equipe</span></button>
             <button class="nav-item" data-page="fornecedores">▣ <span>Fornecedores</span></button>
+            <button class="nav-item" data-page="estoque">▤ <span>Materiais e produtos</span></button>
           </div>
         </div>
         <div class="menu-group is-collapsed">
@@ -912,6 +913,122 @@
             <input id="supplierSearch" class="search-input" placeholder="Buscar fornecedor..." aria-label="Buscar fornecedor">
           </div>
           <div id="supplierList" class="supplier-list"></div>
+        </div>
+      </section>
+
+
+      <section class="page" id="page-estoque">
+        <div class="section-heading">
+          <div>
+            <h2>Materiais e produtos (Estoque)</h2>
+            <p>Cadastre materiais, acompanhe quantidades e organize os itens usados pela marcenaria.</p>
+          </div>
+          <button class="button button-primary" id="newInventoryItemBtn">+ Novo material / produto</button>
+        </div>
+
+        <div class="inventory-notice">
+          <strong>Área independente dos orçamentos</strong>
+          <p>O estoque é controlado separadamente. Alterações aqui não modificam orçamentos nem cálculos de venda.</p>
+        </div>
+
+        <div class="inventory-summary-grid">
+          <article class="inventory-summary-card"><span>Itens cadastrados</span><strong id="inventoryTotalItems">0</strong></article>
+          <article class="inventory-summary-card"><span>Itens abaixo do mínimo</span><strong id="inventoryLowItems">0</strong></article>
+          <article class="inventory-summary-card"><span>No gabarito de Matérias Gerais</span><strong id="inventoryGeneralItems">0</strong></article>
+        </div>
+
+        <form id="inventoryItemForm" class="content-card inventory-form" hidden>
+          <div class="form-heading">
+            <div>
+              <h2 id="inventoryFormTitle">Novo material / produto</h2>
+              <p>Cadastre o item e, se desejar, inclua-o no gabarito de Matérias Gerais.</p>
+            </div>
+            <button type="button" class="button button-outline" id="cancelInventoryItemBtn">Cancelar</button>
+          </div>
+          <input type="hidden" id="inventoryItemId">
+          <div class="form-grid">
+            <label>Nome do material / produto *
+              <input id="inventoryName" required maxlength="150" placeholder="Ex.: MDF branco 15 mm">
+            </label>
+            <label>Categoria
+              <input id="inventoryCategory" maxlength="80" placeholder="Ex.: MDF, ferragens, acessórios">
+            </label>
+            <label>Unidade de medida *
+              <input id="inventoryUnit" required maxlength="30" placeholder="Ex.: chapa, unidade, metro, rolo">
+            </label>
+            <label id="inventoryInitialQuantityField">Saldo inicial
+              <input id="inventoryInitialQuantity" type="number" min="0" max="100000000" step="0.001" value="0">
+              <small id="inventoryQuantityHelp">Se houver quantidade inicial, ela será registrada como saldo de abertura.</small>
+            </label>
+            <label>Quantidade mínima para alerta
+              <input id="inventoryMinQuantity" type="number" min="0" max="100000000" step="0.001" value="0">
+            </label>
+            <label>Custo unitário de referência (R$)
+              <input id="inventoryUnitCost" type="number" min="0" max="100000000" step="0.01" value="0">
+            </label>
+            <label class="full-width">Fornecedor(es)
+              <select id="inventorySuppliers" multiple size="4" aria-describedby="inventorySupplierHelp"></select>
+              <small id="inventorySupplierHelp">Segure Ctrl (ou Command no Mac) para selecionar mais de um fornecedor. O vínculo é apenas informativo.</small>
+            </label>
+            <label class="full-width">Observações
+              <textarea id="inventoryNotes" rows="3" maxlength="1500" placeholder="Detalhes, medidas, especificações ou local de armazenamento"></textarea>
+            </label>
+            <label class="inventory-general-option full-width">
+              <input id="inventoryGeneral" type="checkbox">
+              <span><strong>Incluir em Matérias Gerais</strong><small>Adiciona este item ao gabarito de materiais usados com frequência. Não altera o saldo.</small></span>
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="button button-outline" id="cancelInventoryItemBtnBottom">Cancelar</button>
+            <button type="submit" class="button button-primary">Salvar item</button>
+          </div>
+        </form>
+
+        <form id="inventoryMovementForm" class="content-card inventory-form" hidden>
+          <div class="form-heading">
+            <div>
+              <h2 id="inventoryMovementTitle">Registrar movimentação</h2>
+              <p id="inventoryMovementDescription">Informe a quantidade e a data da movimentação.</p>
+            </div>
+            <button type="button" class="button button-outline" id="cancelInventoryMovementBtn">Cancelar</button>
+          </div>
+          <input type="hidden" id="inventoryMovementItemId">
+          <input type="hidden" id="inventoryMovementType">
+          <div class="form-grid">
+            <label class="full-width">Material / produto
+              <input id="inventoryMovementItemName" readonly>
+            </label>
+            <label>Quantidade *
+              <input id="inventoryMovementQuantity" type="number" min="0.001" max="100000000" step="0.001" required placeholder="Ex.: 2">
+            </label>
+            <label>Data *
+              <input id="inventoryMovementDate" type="date" required>
+            </label>
+            <label class="full-width">Observação
+              <input id="inventoryMovementNotes" maxlength="500" placeholder="Ex.: compra, reposição, uso na oficina">
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="button button-outline" id="cancelInventoryMovementBtnBottom">Cancelar</button>
+            <button type="submit" class="button button-primary" id="saveInventoryMovementBtn">Registrar movimentação</button>
+          </div>
+        </form>
+
+        <div class="content-card inventory-list-card">
+          <div class="inventory-view-tabs" role="tablist" aria-label="Visualizações de materiais e estoque">
+            <button type="button" class="inventory-view-tab active" data-inventory-view="stock" role="tab" aria-selected="true">Estoque</button>
+            <button type="button" class="inventory-view-tab" data-inventory-view="general" role="tab" aria-selected="false">Matérias Gerais (gabarito)</button>
+            <button type="button" class="inventory-view-tab" data-inventory-view="movements" role="tab" aria-selected="false">Movimentações</button>
+          </div>
+          <div class="list-toolbar">
+            <div>
+              <h2 id="inventoryListTitle">Materiais e produtos cadastrados</h2>
+              <p id="inventoryCount">0 itens</p>
+            </div>
+            <input id="inventorySearch" class="search-input" placeholder="Buscar material ou produto..." aria-label="Buscar materiais e produtos">
+          </div>
+          <p class="inventory-view-help" id="inventoryViewHelp">Consulte os saldos e registre entradas e saídas.</p>
+          <div id="inventoryList" class="inventory-list"></div>
         </div>
       </section>
 
