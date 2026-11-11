@@ -131,7 +131,7 @@ function navigateTo(pageName) {
     page.classList.remove("active")
   );
 
-  $$$(".nav-item").forEach((button) =>
+  $(".nav-item").forEach((button) =>
     button.classList.remove("active")
   );
 
