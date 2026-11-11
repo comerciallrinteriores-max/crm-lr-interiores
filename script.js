@@ -122,7 +122,8 @@ const pageNames = {
   financeiro: "Financeiro",
   marketing: "Marketing",
   parceiros: "Parceiros / Comissões",
-  fornecedores: "Fornecedores"
+  fornecedores: "Fornecedores",
+  estoque: "Materiais e produtos (Estoque)"
 };
 
 function navigateTo(pageName) {
@@ -168,6 +169,7 @@ function navigateTo(pageName) {
   if (pageName === "marketing") renderMarketing();
   if (pageName === "parceiros") renderPartners();
   if (pageName === "fornecedores") renderSuppliers();
+  if (pageName === "estoque") renderInventory();
 }
 
 $$(".menu-group-title").forEach((button) => {
@@ -2992,6 +2994,329 @@ $("#supplierList").addEventListener("click", (event) => {
       return;
     }
     renderSuppliers();
+  }
+});
+
+
+/* ---------- Materiais e produtos (estoque) ---------- */
+const INVENTORY_STORAGE_KEY = "lr-interiores-estoque-v1";
+let inventoryItems = loadInventoryItems();
+let inventoryView = "stock";
+
+function loadInventoryItems() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(INVENTORY_STORAGE_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && typeof item.id === "string" && typeof item.name === "string")
+      .map((item) => ({
+        ...item,
+        name: item.name.trim(),
+        category: typeof item.category === "string" ? item.category : "",
+        unit: typeof item.unit === "string" ? item.unit : "unidade",
+        quantity: Math.max(0, Number(item.quantity) || 0),
+        minQuantity: Math.max(0, Number(item.minQuantity) || 0),
+        unitCost: Math.max(0, Number(item.unitCost) || 0),
+        supplierIds: Array.isArray(item.supplierIds) ? item.supplierIds.filter((id) => typeof id === "string") : [],
+        general: item.general === true,
+        notes: typeof item.notes === "string" ? item.notes : "",
+        movements: Array.isArray(item.movements) ? item.movements.filter((movement) =>
+          movement && ["entrada", "saida"].includes(movement.type) && Number(movement.quantity) > 0
+        ) : [],
+        createdAt: item.createdAt || new Date().toISOString(),
+        updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+      }));
+  } catch (error) {
+    console.error("Não foi possível carregar o estoque:", error);
+    return [];
+  }
+}
+
+function saveInventoryItems() {
+  try {
+    localStorage.setItem(INVENTORY_STORAGE_KEY, JSON.stringify(inventoryItems));
+    return true;
+  } catch (error) {
+    console.error("Não foi possível salvar o estoque:", error);
+    alert("Não foi possível preparar o estoque para sincronização. Confira a conexão com o Firebase e tente novamente.");
+    return false;
+  }
+}
+
+function renderInventorySupplierOptions(selectedIds = []) {
+  const select = $("#inventorySuppliers");
+  if (!select) return;
+  select.innerHTML = suppliers.length
+    ? suppliers.map((supplier) => `<option value="${escapeHTML(supplier.id)}" ${selectedIds.includes(supplier.id) ? "selected" : ""}>${escapeHTML(supplier.name)}</option>`).join("")
+    : '<option value="" disabled>Nenhum fornecedor cadastrado</option>';
+}
+
+function openInventoryItemForm(item = null) {
+  const form = $("#inventoryItemForm");
+  form.reset();
+  $("#inventoryItemId").value = item?.id || "";
+  $("#inventoryFormTitle").textContent = item ? "Editar material / produto" : "Novo material / produto";
+  $("#inventoryName").value = item?.name || "";
+  $("#inventoryCategory").value = item?.category || "";
+  $("#inventoryUnit").value = item?.unit || "";
+  $("#inventoryInitialQuantity").value = String(item?.quantity ?? 0);
+  $("#inventoryInitialQuantity").readOnly = Boolean(item);
+  $("#inventoryInitialQuantityField").querySelector("small").textContent = item
+    ? "O saldo atual não é editado diretamente. Use Entrada ou Saída para manter o histórico."
+    : "Se houver quantidade inicial, ela será registrada como saldo de abertura.";
+  $("#inventoryMinQuantity").value = String(item?.minQuantity ?? 0);
+  $("#inventoryUnitCost").value = String(item?.unitCost ?? 0);
+  $("#inventoryNotes").value = item?.notes || "";
+  $("#inventoryGeneral").checked = item?.general === true;
+  renderInventorySupplierOptions(item?.supplierIds || []);
+  form.hidden = false;
+  $("#inventoryMovementForm").hidden = true;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#inventoryName").focus({ preventScroll: true });
+}
+
+function closeInventoryItemForm() {
+  $("#inventoryItemForm").hidden = true;
+  $("#inventoryItemForm").reset();
+  $("#inventoryItemId").value = "";
+  $("#inventoryInitialQuantity").readOnly = false;
+}
+
+function openInventoryMovementForm(item, type) {
+  if (!item || !["entrada", "saida"].includes(type)) return;
+  $("#inventoryMovementForm").reset();
+  $("#inventoryMovementItemId").value = item.id;
+  $("#inventoryMovementType").value = type;
+  $("#inventoryMovementItemName").value = item.name;
+  $("#inventoryMovementTitle").textContent = type === "entrada" ? "Registrar entrada no estoque" : "Registrar saída do estoque";
+  $("#inventoryMovementDescription").textContent = type === "entrada"
+    ? `Saldo atual: ${item.quantity.toLocaleString("pt-BR")} ${item.unit}. Informe quanto entrou.`
+    : `Saldo atual: ${item.quantity.toLocaleString("pt-BR")} ${item.unit}. A saída não pode ser maior que o saldo disponível.`;
+  $("#inventoryMovementQuantity").value = "";
+  $("#inventoryMovementQuantity").max = type === "saida" ? String(item.quantity) : "100000000";
+  $("#inventoryMovementDate").value = localISODate();
+  $("#inventoryMovementNotes").value = "";
+  $("#inventoryMovementForm").hidden = false;
+  $("#inventoryItemForm").hidden = true;
+  $("#inventoryMovementForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#inventoryMovementQuantity").focus({ preventScroll: true });
+}
+
+function closeInventoryMovementForm() {
+  $("#inventoryMovementForm").hidden = true;
+  $("#inventoryMovementForm").reset();
+  $("#inventoryMovementItemId").value = "";
+  $("#inventoryMovementType").value = "";
+}
+
+function setInventoryView(view) {
+  if (!["stock", "general", "movements"].includes(view)) return;
+  inventoryView = view;
+  $("#inventorySearch").value = "";
+  renderInventory();
+}
+
+function renderInventory() {
+  const term = ($("#inventorySearch").value || "").trim().toLocaleLowerCase("pt-BR");
+  const lowItems = inventoryItems.filter((item) => item.minQuantity > 0 && item.quantity <= item.minQuantity);
+  $("#inventoryTotalItems").textContent = String(inventoryItems.length);
+  $("#inventoryLowItems").textContent = String(lowItems.length);
+  $("#inventoryGeneralItems").textContent = String(inventoryItems.filter((item) => item.general).length);
+
+  $$(".inventory-view-tab").forEach((button) => {
+    const active = button.dataset.inventoryView === inventoryView;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+
+  const list = $("#inventoryList");
+  if (inventoryView === "movements") {
+    $("#inventoryListTitle").textContent = "Histórico de movimentações";
+    $("#inventoryViewHelp").textContent = "Entradas e saídas registradas no estoque. Os orçamentos não são alterados.";
+    const movements = inventoryItems.flatMap((item) =>
+      item.movements.map((movement) => ({ ...movement, itemId: item.id, itemName: item.name, unit: item.unit }))
+    ).filter((movement) =>
+      `${movement.itemName} ${movement.notes || ""} ${movement.type}`.toLocaleLowerCase("pt-BR").includes(term)
+    ).sort((a, b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0));
+    $("#inventoryCount").textContent = `${movements.length} ${movements.length === 1 ? "movimentação" : "movimentações"}`;
+    list.innerHTML = movements.length ? movements.map((movement) => `
+      <article class="inventory-movement-row">
+        <div class="inventory-movement-icon ${movement.type}">${movement.type === "entrada" ? "↓" : "↑"}</div>
+        <div class="inventory-row-info">
+          <strong>${escapeHTML(movement.itemName)}</strong>
+          <span>${movement.type === "entrada" ? "Entrada" : "Saída"} · ${movement.quantity.toLocaleString("pt-BR")} ${escapeHTML(movement.unit)}</span>
+          <small>${escapeHTML(movement.notes || "Sem observação")} · ${escapeHTML(formatHistoryDate(movement.date))}</small>
+        </div>
+      </article>
+    `).join("") : '<div class="list-empty">Nenhuma movimentação encontrada.</div>';
+    return;
+  }
+
+  const isGeneral = inventoryView === "general";
+  const filtered = inventoryItems.filter((item) => {
+    if (isGeneral && !item.general) return false;
+    return `${item.name} ${item.category} ${item.unit} ${item.notes}`.toLocaleLowerCase("pt-BR").includes(term);
+  }).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+
+  $("#inventoryListTitle").textContent = isGeneral ? "Gabarito de Matérias Gerais" : "Materiais e produtos cadastrados";
+  $("#inventoryViewHelp").textContent = isGeneral
+    ? "Lista de referência dos materiais usados com frequência. Esta visualização não movimenta nem altera o estoque."
+    : "Consulte os saldos, registre entradas e saídas e acompanhe os itens abaixo do mínimo.";
+  $("#inventoryCount").textContent = `${filtered.length} ${filtered.length === 1 ? "item" : "itens"}`;
+
+  list.innerHTML = filtered.length ? filtered.map((item) => {
+    const low = item.minQuantity > 0 && item.quantity <= item.minQuantity;
+    const supplierNames = item.supplierIds.map((id) => suppliers.find((supplier) => supplier.id === id)?.name).filter(Boolean);
+    const actions = isGeneral
+      ? `<button type="button" class="button button-outline" data-inventory-edit="${escapeHTML(item.id)}">Editar cadastro</button><button type="button" class="button button-outline" data-inventory-toggle-general="${escapeHTML(item.id)}">Remover do gabarito</button>`
+      : `<button type="button" class="button button-primary" data-inventory-movement="entrada" data-inventory-id="${escapeHTML(item.id)}">Entrada</button><button type="button" class="button button-outline" data-inventory-movement="saida" data-inventory-id="${escapeHTML(item.id)}">Saída</button><button type="button" class="button button-outline" data-inventory-edit="${escapeHTML(item.id)}">Editar</button><button type="button" class="button button-outline" data-inventory-toggle-general="${escapeHTML(item.id)}">${item.general ? "Remover do gabarito" : "Adicionar ao gabarito"}</button><button type="button" class="button button-danger" data-inventory-delete="${escapeHTML(item.id)}">Excluir</button>`;
+    return `<article class="inventory-item-row">
+      <div class="inventory-item-icon">▤</div>
+      <div class="inventory-row-info">
+        <div class="inventory-item-heading"><strong>${escapeHTML(item.name)}</strong>${low && !isGeneral ? '<span class="inventory-low-badge">Abaixo do mínimo</span>' : ""}${item.general && !isGeneral ? '<span class="inventory-general-badge">Matéria Geral</span>' : ""}</div>
+        <span>${escapeHTML(item.category || "Sem categoria")} · Unidade: ${escapeHTML(item.unit)}</span>
+        ${isGeneral ? "" : `<div class="inventory-item-meta"><span>Saldo: <strong>${item.quantity.toLocaleString("pt-BR")} ${escapeHTML(item.unit)}</strong></span><span>Mínimo: ${item.minQuantity.toLocaleString("pt-BR")} ${escapeHTML(item.unit)}</span><span>Custo ref.: ${formatBRL(item.unitCost)}</span></div>`}
+        ${supplierNames.length ? `<small>Fornecedor(es): ${escapeHTML(supplierNames.join(", "))}</small>` : ""}
+        ${item.notes ? `<small>${escapeHTML(item.notes)}</small>` : ""}
+      </div>
+      <div class="inventory-item-actions">${actions}</div>
+    </article>`;
+  }).join("") : `<div class="list-empty">${isGeneral ? "Nenhum item foi incluído em Matérias Gerais ainda." : "Nenhum material ou produto cadastrado. Clique em “+ Novo material / produto” para começar."}</div>`;
+}
+
+$("#newInventoryItemBtn").addEventListener("click", () => openInventoryItemForm());
+$("#cancelInventoryItemBtn").addEventListener("click", closeInventoryItemForm);
+$("#cancelInventoryItemBtnBottom").addEventListener("click", closeInventoryItemForm);
+$("#cancelInventoryMovementBtn").addEventListener("click", closeInventoryMovementForm);
+$("#cancelInventoryMovementBtnBottom").addEventListener("click", closeInventoryMovementForm);
+$("#inventorySearch").addEventListener("input", renderInventory);
+$$(".inventory-view-tab").forEach((button) => {
+  button.addEventListener("click", () => setInventoryView(button.dataset.inventoryView));
+});
+
+$("#inventoryItemForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const id = $("#inventoryItemId").value;
+  const name = $("#inventoryName").value.trim();
+  const unit = $("#inventoryUnit").value.trim();
+  const initialQuantity = Number($("#inventoryInitialQuantity").value);
+  const minQuantity = Number($("#inventoryMinQuantity").value || 0);
+  const unitCost = Number($("#inventoryUnitCost").value || 0);
+  if (!name || !unit || !Number.isFinite(minQuantity) || minQuantity < 0 || !Number.isFinite(unitCost) || unitCost < 0 ||
+      (!id && (!Number.isFinite(initialQuantity) || initialQuantity < 0))) {
+    alert("Confira o nome, a unidade, o saldo inicial, a quantidade mínima e o custo informado.");
+    return;
+  }
+
+  const existing = inventoryItems.find((item) => item.id === id);
+  const previous = [...inventoryItems];
+  const now = new Date().toISOString();
+  const quantity = existing ? existing.quantity : Math.round(initialQuantity * 1000) / 1000;
+  const movements = existing ? [...existing.movements] : [];
+  if (!existing && quantity > 0) {
+    movements.unshift({ id: createId(), type: "entrada", quantity, date: localISODate(), notes: "Saldo inicial", createdAt: now });
+  }
+  const selectedSupplierIds = Array.from($("#inventorySuppliers").selectedOptions).map((option) => option.value).filter(Boolean);
+  const record = {
+    id: id || createId(),
+    name,
+    category: $("#inventoryCategory").value.trim(),
+    unit,
+    quantity,
+    minQuantity: Math.round(minQuantity * 1000) / 1000,
+    unitCost: Math.round(unitCost * 100) / 100,
+    supplierIds: selectedSupplierIds,
+    general: $("#inventoryGeneral").checked,
+    notes: $("#inventoryNotes").value.trim(),
+    movements,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now
+  };
+  inventoryItems = existing
+    ? inventoryItems.map((item) => item.id === id ? record : item)
+    : [record, ...inventoryItems];
+  if (!saveInventoryItems()) {
+    inventoryItems = previous;
+    return;
+  }
+  closeInventoryItemForm();
+  renderInventory();
+});
+
+$("#inventoryMovementForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const itemId = $("#inventoryMovementItemId").value;
+  const type = $("#inventoryMovementType").value;
+  const item = inventoryItems.find((entry) => entry.id === itemId);
+  const quantity = Number($("#inventoryMovementQuantity").value);
+  const date = $("#inventoryMovementDate").value;
+  if (!item || !["entrada", "saida"].includes(type) || !Number.isFinite(quantity) || quantity <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    alert("Informe uma quantidade e uma data válidas para a movimentação.");
+    return;
+  }
+  if (type === "saida" && quantity > item.quantity) {
+    alert(`A saída não pode ser maior que o saldo disponível (${item.quantity.toLocaleString("pt-BR")} ${item.unit}).`);
+    return;
+  }
+  const previous = [...inventoryItems];
+  const now = new Date().toISOString();
+  const roundedQuantity = Math.round(quantity * 1000) / 1000;
+  const nextQuantity = Math.round((item.quantity + (type === "entrada" ? roundedQuantity : -roundedQuantity)) * 1000) / 1000;
+  const movement = {
+    id: createId(),
+    type,
+    quantity: roundedQuantity,
+    date,
+    notes: $("#inventoryMovementNotes").value.trim(),
+    createdAt: now
+  };
+  inventoryItems = inventoryItems.map((entry) => entry.id === item.id
+    ? { ...entry, quantity: nextQuantity, movements: [movement, ...(entry.movements || [])], updatedAt: now }
+    : entry
+  );
+  if (!saveInventoryItems()) {
+    inventoryItems = previous;
+    return;
+  }
+  closeInventoryMovementForm();
+  renderInventory();
+});
+
+$("#inventoryList").addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-inventory-edit]");
+  const movementButton = event.target.closest("[data-inventory-movement]");
+  const toggleGeneralButton = event.target.closest("[data-inventory-toggle-general]");
+  const deleteButton = event.target.closest("[data-inventory-delete]");
+  if (editButton) {
+    const item = inventoryItems.find((entry) => entry.id === editButton.dataset.inventoryEdit);
+    if (item) openInventoryItemForm(item);
+    return;
+  }
+  if (movementButton) {
+    const item = inventoryItems.find((entry) => entry.id === movementButton.dataset.inventoryId);
+    if (item) openInventoryMovementForm(item, movementButton.dataset.inventoryMovement);
+    return;
+  }
+  if (toggleGeneralButton) {
+    const item = inventoryItems.find((entry) => entry.id === toggleGeneralButton.dataset.inventoryToggleGeneral);
+    if (!item) return;
+    const previous = [...inventoryItems];
+    inventoryItems = inventoryItems.map((entry) => entry.id === item.id
+      ? { ...entry, general: !entry.general, updatedAt: new Date().toISOString() }
+      : entry
+    );
+    if (!saveInventoryItems()) inventoryItems = previous;
+    renderInventory();
+    return;
+  }
+  if (deleteButton) {
+    const item = inventoryItems.find((entry) => entry.id === deleteButton.dataset.inventoryDelete);
+    if (!item) return;
+    if (!confirm(`Deseja excluir "${item.name}" do estoque? O histórico de movimentações deste item também será removido.`)) return;
+    const previous = [...inventoryItems];
+    inventoryItems = inventoryItems.filter((entry) => entry.id !== item.id);
+    if (!saveInventoryItems()) inventoryItems = previous;
+    renderInventory();
   }
 });
 

@@ -23,7 +23,8 @@ const stores = {
   "lr-interiores-parceiros-v1": "parceiros",
   "lr-interiores-comissoes-v1": "comissoes",
   "lr-interiores-equipe-v1": "equipe",
-  "lr-interiores-fornecedores-v1": "fornecedores"
+  "lr-interiores-fornecedores-v1": "fornecedores",
+  "lr-interiores-estoque-v1": "estoque"
 };
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -561,7 +562,7 @@ export async function restoreEncryptedBackup(fileContents, password, uid) {
   }
   // Older backups may not contain stores added in later CRM versions.
   // Treat those optional stores as empty during restore so valid older backups remain usable.
-  for (const storageKey of ["lr-interiores-parceiros-v1", "lr-interiores-comissoes-v1", "lr-interiores-equipe-v1"]) {
+  for (const storageKey of ["lr-interiores-parceiros-v1", "lr-interiores-comissoes-v1", "lr-interiores-equipe-v1", "lr-interiores-estoque-v1"]) {
     if (!Array.isArray(decoded.stores[storageKey])) decoded.stores[storageKey] = [];
   }
   validateBackupStores(decoded.stores);
