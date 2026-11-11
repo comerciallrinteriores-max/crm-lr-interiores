@@ -3123,7 +3123,7 @@ function renderInventory() {
   $("#inventoryLowItems").textContent = String(lowItems.length);
   $("#inventoryGeneralItems").textContent = String(inventoryItems.filter((item) => item.general).length);
 
-  $(".inventory-view-tab").forEach((button) => {
+  $$(".inventory-view-tab").forEach((button) => {
     const active = button.dataset.inventoryView === inventoryView;
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
@@ -3190,7 +3190,7 @@ $("#cancelInventoryItemBtnBottom").addEventListener("click", closeInventoryItemF
 $("#cancelInventoryMovementBtn").addEventListener("click", closeInventoryMovementForm);
 $("#cancelInventoryMovementBtnBottom").addEventListener("click", closeInventoryMovementForm);
 $("#inventorySearch").addEventListener("input", renderInventory);
-$(".inventory-view-tab").forEach((button) => {
+$$(".inventory-view-tab").forEach((button) => {
   button.addEventListener("click", () => setInventoryView(button.dataset.inventoryView));
 });
 
