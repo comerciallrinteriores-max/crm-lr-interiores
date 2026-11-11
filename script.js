@@ -121,7 +121,8 @@ const pageNames = {
   equipe: "Equipe",
   financeiro: "Financeiro",
   marketing: "Marketing",
-  parceiros: "Parceiros / Comissões"
+  parceiros: "Parceiros / Comissões",
+  fornecedores: "Fornecedores"
 };
 
 function navigateTo(pageName) {
@@ -166,6 +167,7 @@ function navigateTo(pageName) {
   if (pageName === "financeiro") renderFinance();
   if (pageName === "marketing") renderMarketing();
   if (pageName === "parceiros") renderPartners();
+  if (pageName === "fornecedores") renderSuppliers();
 }
 
 $$(".menu-group-title").forEach((button) => {
@@ -2855,6 +2857,143 @@ updateQuoteCalculations();
 renderSales();
 renderProduction();
 
+
+
+/* ---------- Cadastro de fornecedores ---------- */
+const SUPPLIERS_STORAGE_KEY = "lr-interiores-fornecedores-v1";
+let suppliers = loadSuppliers();
+
+function loadSuppliers() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SUPPLIERS_STORAGE_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && typeof item.id === "string" && typeof item.name === "string")
+      .map((item) => ({
+        ...item,
+        name: item.name.trim(),
+        phone: typeof item.phone === "string" ? item.phone : "",
+        notes: typeof item.notes === "string" ? item.notes : "",
+        createdAt: item.createdAt || new Date().toISOString(),
+        updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+      }));
+  } catch (error) {
+    console.error("Não foi possível carregar os fornecedores:", error);
+    return [];
+  }
+}
+
+function saveSuppliers() {
+  try {
+    localStorage.setItem(SUPPLIERS_STORAGE_KEY, JSON.stringify(suppliers));
+    return true;
+  } catch (error) {
+    console.error("Não foi possível salvar os fornecedores:", error);
+    alert("Não foi possível preparar os fornecedores para sincronização. Confira a conexão com o Firebase e tente novamente.");
+    return false;
+  }
+}
+
+function openSupplierForm(supplier = null) {
+  const form = $("#supplierForm");
+  form.reset();
+  $("#supplierId").value = "";
+  $("#supplierFormTitle").textContent = supplier ? "Editar fornecedor" : "Novo fornecedor";
+  if (supplier) {
+    $("#supplierId").value = supplier.id;
+    $("#supplierName").value = supplier.name || "";
+    $("#supplierPhone").value = supplier.phone || "";
+    $("#supplierNotes").value = supplier.notes || "";
+  }
+  form.hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#supplierName").focus({ preventScroll: true });
+}
+
+function closeSupplierForm() {
+  $("#supplierForm").hidden = true;
+  $("#supplierForm").reset();
+  $("#supplierId").value = "";
+}
+
+function renderSuppliers() {
+  const term = ($("#supplierSearch").value || "").trim().toLocaleLowerCase("pt-BR");
+  const filtered = suppliers
+    .filter((item) => `${item.name} ${item.phone} ${item.notes}`.toLocaleLowerCase("pt-BR").includes(term))
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+
+  $("#supplierCount").textContent = `${filtered.length} ${filtered.length === 1 ? "fornecedor" : "fornecedores"}`;
+  $("#supplierList").innerHTML = filtered.length ? filtered.map((supplier) => `
+    <article class="supplier-row">
+      <div class="supplier-avatar">${escapeHTML(supplier.name.slice(0, 2).toLocaleUpperCase("pt-BR"))}</div>
+      <div class="supplier-info">
+        <strong>${escapeHTML(supplier.name)}</strong>
+        ${supplier.phone ? `<span>${escapeHTML(supplier.phone)}</span>` : ""}
+        ${supplier.notes ? `<small>${escapeHTML(supplier.notes)}</small>` : ""}
+      </div>
+      <div class="supplier-actions">
+        <button type="button" class="icon-button" data-supplier-edit="${escapeHTML(supplier.id)}">Editar</button>
+        <button type="button" class="icon-button delete" data-supplier-delete="${escapeHTML(supplier.id)}">Excluir</button>
+      </div>
+    </article>
+  `).join("") : '<div class="list-empty">Nenhum fornecedor cadastrado. Clique em “+ Novo fornecedor” para começar.</div>';
+}
+
+$("#newSupplierBtn").addEventListener("click", () => openSupplierForm());
+$("#cancelSupplierBtn").addEventListener("click", closeSupplierForm);
+$("#cancelSupplierBtnBottom").addEventListener("click", closeSupplierForm);
+$("#supplierSearch").addEventListener("input", renderSuppliers);
+$("#supplierForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const id = $("#supplierId").value;
+  const name = $("#supplierName").value.trim();
+  if (!name) {
+    alert("Informe o nome do fornecedor.");
+    return;
+  }
+  const existing = suppliers.find((item) => item.id === id);
+  const previous = [...suppliers];
+  const now = new Date().toISOString();
+  const record = {
+    id: id || createId(),
+    name,
+    phone: $("#supplierPhone").value.trim(),
+    notes: $("#supplierNotes").value.trim(),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now
+  };
+  suppliers = id
+    ? suppliers.map((item) => item.id === id ? record : item)
+    : [record, ...suppliers];
+  if (!saveSuppliers()) {
+    suppliers = previous;
+    return;
+  }
+  closeSupplierForm();
+  renderSuppliers();
+});
+
+$("#supplierList").addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-supplier-edit]");
+  const deleteButton = event.target.closest("[data-supplier-delete]");
+  if (editButton) {
+    const supplier = suppliers.find((item) => item.id === editButton.dataset.supplierEdit);
+    if (supplier) openSupplierForm(supplier);
+    return;
+  }
+  if (deleteButton) {
+    const supplier = suppliers.find((item) => item.id === deleteButton.dataset.supplierDelete);
+    if (!supplier) return;
+    if (!confirm(`Deseja excluir o fornecedor “${supplier.name}”? Esta ação não pode ser desfeita.`)) return;
+    const previous = [...suppliers];
+    suppliers = suppliers.filter((item) => item.id !== supplier.id);
+    if (!saveSuppliers()) {
+      suppliers = previous;
+      return;
+    }
+    renderSuppliers();
+  }
+});
 
 /* ---------- Parceiros e comissões ---------- */
 const PARTNERS_STORAGE_KEY = "lr-interiores-parceiros-v1";
