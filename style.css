@@ -1142,3 +1142,19 @@ textarea {
   .client-history-content { grid-template-columns: 1fr; }
   .client-history-item { flex-direction: column; gap: 3px; }
 }
+
+
+/* ---------- Cadastro de fornecedores ---------- */
+.supplier-form { margin-bottom: 22px; }
+.supplier-list { display: grid; gap: 10px; }
+.supplier-row { display: flex; align-items: center; gap: 13px; min-width: 0; padding: 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.supplier-avatar { display: grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px; border-radius: 12px; background: var(--green-light); color: var(--green); font-size: 13px; font-weight: 700; }
+.supplier-info { flex: 1; min-width: 0; }
+.supplier-info strong { display: block; color: var(--green); font-size: 13px; overflow-wrap: anywhere; }
+.supplier-info span, .supplier-info small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.supplier-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+@media (max-width: 560px) {
+  .supplier-row { align-items: flex-start; flex-wrap: wrap; }
+  .supplier-info { width: calc(100% - 60px); flex: 1 1 calc(100% - 60px); }
+  .supplier-actions { width: 100%; justify-content: flex-end; padding-top: 8px; border-top: 1px solid var(--border); }
+}
