@@ -1158,3 +1158,44 @@ textarea {
   .supplier-info { width: calc(100% - 60px); flex: 1 1 calc(100% - 60px); }
   .supplier-actions { width: 100%; justify-content: flex-end; padding-top: 8px; border-top: 1px solid var(--border); }
 }
+
+
+/* ---------- Materiais e produtos (estoque) ---------- */
+.inventory-notice { margin: 0 0 18px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.inventory-notice strong { display: block; color: var(--green); font-size: 13px; }
+.inventory-notice p { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.inventory-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.inventory-summary-card { display: grid; gap: 7px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.inventory-summary-card span { color: var(--muted); font-size: 12px; }
+.inventory-summary-card strong { color: var(--green); font-size: 24px; }
+.inventory-form { margin-bottom: 20px; }
+.inventory-form label small { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.inventory-form select[multiple] { min-height: 92px; }
+.inventory-general-option { display: flex !important; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.inventory-general-option input { width: auto; margin-top: 3px; }
+.inventory-general-option span { display: grid; gap: 4px; }
+.inventory-view-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.inventory-view-tab { padding: 9px 13px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.inventory-view-tab.active { border-color: var(--green); background: var(--green-light); color: var(--green); font-weight: 700; }
+.inventory-view-help { margin: -5px 0 14px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.inventory-list { display: grid; gap: 10px; }
+.inventory-item-row, .inventory-movement-row { display: flex; align-items: flex-start; gap: 13px; min-width: 0; padding: 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.inventory-item-icon, .inventory-movement-icon { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border-radius: 11px; background: var(--green-light); color: var(--green); font-size: 17px; font-weight: 700; }
+.inventory-movement-icon.entrada { background: #e9f4ed; color: #287448; }
+.inventory-movement-icon.saida { background: #fff1e8; color: #a75b2b; }
+.inventory-row-info { flex: 1; min-width: 0; }
+.inventory-row-info > strong, .inventory-item-heading strong { color: var(--green); font-size: 13px; overflow-wrap: anywhere; }
+.inventory-row-info > span, .inventory-row-info small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.inventory-item-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.inventory-item-meta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; color: var(--muted); font-size: 11px; }
+.inventory-item-meta strong { color: var(--text); }
+.inventory-low-badge, .inventory-general-badge { padding: 3px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+.inventory-low-badge { background: #fff1e8; color: #a75b2b; }
+.inventory-general-badge { background: var(--green-light); color: var(--green); }
+.inventory-item-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 330px; }
+.inventory-item-actions .button { padding: 7px 9px; font-size: 11px; }
+@media (max-width: 760px) {
+  .inventory-summary-grid { grid-template-columns: 1fr; }
+  .inventory-item-row, .inventory-movement-row { flex-wrap: wrap; }
+  .inventory-item-actions { width: 100%; max-width: none; justify-content: flex-start; padding-top: 8px; border-top: 1px solid var(--border); }
+}
