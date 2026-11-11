@@ -139,7 +139,15 @@ function navigateTo(pageName) {
   const navButton = $(`.nav-item[data-page="${pageName}"]`);
 
   if (page) page.classList.add("active");
-  if (navButton) navButton.classList.add("active");
+  if (navButton) {
+    navButton.classList.add("active");
+    const activeGroup = navButton.closest(".menu-group");
+    if (activeGroup) {
+      activeGroup.classList.remove("is-collapsed");
+      const groupToggle = activeGroup.querySelector(".menu-group-title");
+      if (groupToggle) groupToggle.setAttribute("aria-expanded", "true");
+    }
+  }
 
   $("#pageTitle").textContent = pageNames[pageName];
   $("#sidebar").classList.remove("open");
@@ -160,7 +168,16 @@ function navigateTo(pageName) {
   if (pageName === "parceiros") renderPartners();
 }
 
-$$(".nav-item").forEach((button) => {
+$(".menu-group-title").forEach((button) => {
+  button.addEventListener("click", () => {
+    const group = button.closest(".menu-group");
+    if (!group) return;
+    const collapsed = group.classList.toggle("is-collapsed");
+    button.setAttribute("aria-expanded", String(!collapsed));
+  });
+});
+
+$(".nav-item").forEach((button) => {
   button.addEventListener("click", () =>
     navigateTo(button.dataset.page)
   );
