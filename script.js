@@ -177,7 +177,7 @@ $$(".menu-group-title").forEach((button) => {
   });
 });
 
-$(".nav-item").forEach((button) => {
+$$(".nav-item").forEach((button) => {
   button.addEventListener("click", () =>
     navigateTo(button.dataset.page)
   );
