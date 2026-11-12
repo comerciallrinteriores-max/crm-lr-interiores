@@ -3061,6 +3061,7 @@ function closeInventoryPurchaseForm() {
 }
 
 function renderInventoryPurchaseList() {
+  renderInventoryPurchaseSupplierOptions();
   const categoryFilter = $("#inventoryPurchaseCategoryFilter");
   const selectedCategory = categoryFilter.value;
   const categories = [...new Set(inventoryPurchaseItems.map((item) => item.category.trim()).filter(Boolean))]
