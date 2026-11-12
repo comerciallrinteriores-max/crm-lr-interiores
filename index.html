@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#173d32">
   <title>CRM | LR Interiores</title>
-  <link rel="stylesheet" href="style.css?v=20261112-purchases1">
+  <link rel="stylesheet" href="style.css?v=20261112-purchases2">
   <link rel="stylesheet" href="orcamentos.css?v=20261022-quote-client1">
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
   <link rel="stylesheet" href="producao.css?v=20261016-production2">
@@ -1039,11 +1039,28 @@
               <label>Filtrar por categoria
                 <select id="inventoryPurchaseCategoryFilter"><option value="">Todas as categorias</option></select>
               </label>
-              <label>Fornecedor para o PDF
-                <input id="inventoryPurchaseSupplier" maxlength="120" placeholder="Nome do fornecedor (opcional)">
-              </label>
+              <div class="inventory-purchase-supplier-field">
+                <label for="inventoryPurchaseSupplier">Fornecedor para o PDF</label>
+                <select id="inventoryPurchaseSupplier"><option value="">Não selecionar fornecedor</option></select>
+                <button type="button" class="button button-outline" id="newInventoryPurchaseSupplierBtn">+ Cadastrar fornecedor</button>
+              </div>
               <button type="button" class="button button-outline" id="exportInventoryPurchasePdfBtn">Gerar PDF</button>
             </div>
+            <form id="inventoryPurchaseSupplierForm" class="inventory-form inventory-purchase-supplier-form" hidden>
+              <div class="form-heading">
+                <div><h3>Novo fornecedor</h3><p>O cadastro também ficará disponível na área Fornecedores do CRM.</p></div>
+                <button type="button" class="button button-outline" id="cancelInventoryPurchaseSupplierBtn">Cancelar</button>
+              </div>
+              <div class="form-grid">
+                <label>Nome do fornecedor *<input id="inventoryPurchaseSupplierName" required maxlength="150" placeholder="Nome do fornecedor"></label>
+                <label>Telefone<input id="inventoryPurchaseSupplierPhone" maxlength="40" placeholder="Telefone ou WhatsApp"></label>
+                <label class="full-width">Observações<textarea id="inventoryPurchaseSupplierNotes" rows="2" maxlength="500" placeholder="Informações adicionais (opcional)"></textarea></label>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="button button-outline" id="cancelInventoryPurchaseSupplierBtnBottom">Cancelar</button>
+                <button type="submit" class="button button-primary">Salvar fornecedor</button>
+              </div>
+            </form>
             <form id="inventoryPurchaseForm" class="inventory-form inventory-purchase-form" hidden>
               <div class="form-heading">
                 <div><h3 id="inventoryPurchaseFormTitle">Adicionar material à lista</h3><p>Esta anotação não altera o estoque nem o gabarito de Matérias Gerais.</p></div>
