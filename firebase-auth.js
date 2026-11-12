@@ -293,7 +293,7 @@ createBackupButton?.addEventListener("click", async () => {
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
     backupPassword.value = "";
     backupPasswordConfirm.value = "";
     setBackupStatus("Backup criptografado criado. Guarde o arquivo e a senha em locais seguros.");
@@ -326,13 +326,14 @@ backupFileInput?.addEventListener("change", async () => {
     backupFileInput.value = "";
     return;
   }
-  const confirmed = window.confirm("Atenção: restaurar o backup substituirá os dados atuais do CRM nas áreas do CRM (clientes, orçamentos, vendas, produção, financeiro, parceiros/comissões e equipe). Faça isso somente se deseja substituir os dados atuais. Deseja continuar?");
+  const confirmed = window.confirm("Atenção: restaurar o backup substituirá os dados atuais dos 11 módulos do CRM: clientes, orçamentos, financeiro, vendas, produção, parceiros, comissões, equipe, fornecedores, estoque e lista de compras. Faça isso somente se deseja substituir os dados atuais. Deseja continuar?");
   if (!confirmed) {
     backupFileInput.value = "";
     return;
   }
   restoreBackupButton.disabled = true;
   createBackupButton.disabled = true;
+  if (crmApp) crmApp.inert = true;
   setBackupStatus("Validando o backup e restaurando os dados…");
   try {
     const contents = await file.text();
@@ -340,10 +341,15 @@ backupFileInput?.addEventListener("change", async () => {
     backupRestorePassword.value = "";
     setBackupStatus("Backup restaurado. Clientes: " + result.counts["lr-interiores-crm-v1"] +
       "; orçamentos: " + result.counts["lr-interiores-orcamentos-v1"] +
+      "; financeiro: " + result.counts["lr-interiores-financeiro-v1"] +
       "; vendas: " + result.counts["lr-interiores-funil-v1"] +
       "; produção: " + result.counts["lr-interiores-producao-v1"] +
-      "; financeiro: " + result.counts["lr-interiores-financeiro-v1"] +
-      "; equipe: " + result.counts["lr-interiores-equipe-v1"] + ".");
+      "; parceiros: " + result.counts["lr-interiores-parceiros-v1"] +
+      "; comissões: " + result.counts["lr-interiores-comissoes-v1"] +
+      "; equipe: " + result.counts["lr-interiores-equipe-v1"] +
+      "; fornecedores: " + result.counts["lr-interiores-fornecedores-v1"] +
+      "; estoque: " + result.counts["lr-interiores-estoque-v1"] +
+      "; lista de compras: " + result.counts["lr-interiores-lista-compras-v1"] + ".");
     backupFileInput.value = "";
     window.setTimeout(() => window.location.reload(), 1200);
   } catch (error) {
@@ -359,6 +365,7 @@ backupFileInput?.addEventListener("change", async () => {
     };
     setBackupStatus(messages[error.code] || error.message || "Não foi possível restaurar o backup.", true);
   } finally {
+    if (crmApp) crmApp.inert = false;
     restoreBackupButton.disabled = false;
     createBackupButton.disabled = false;
   }
