@@ -37,6 +37,7 @@ let originalRemoveItem = null;
 let queues = new Map();
 let pendingWrites = 0;
 let lastWriteError = false;
+const writeErrors = new Set();
 
 function startupDiagnosticsEnabled() {
   return new URLSearchParams(globalThis.location?.search || "").get("debugPerformance") === "1";
@@ -57,6 +58,24 @@ function setStatus(message, state = "ok") {
   element.textContent = message;
   element.dataset.state = state;
   element.setAttribute("aria-live", "polite");
+}
+function refreshWriteStatus() {
+  lastWriteError = writeErrors.size > 0;
+  if (pendingWrites > 0) {
+    setStatus(lastWriteError
+      ? "Salvando na nuvem… há alterações anteriores não confirmadas"
+      : "Salvando na nuvem…", "busy");
+  } else if (lastWriteError) {
+    setStatus("Falha na nuvem — alterações ainda não confirmadas", "error");
+  } else {
+    setStatus("Dados criptografados e sincronizados", "ok");
+  }
+}
+async function waitForPendingWrites() {
+  await Promise.all([...queues.values()].map((queue) => queue.catch(() => {})));
+  if (lastWriteError) {
+    throw fail("SYNC_PENDING", "Há alterações que não foram confirmadas na nuvem. Resolva a sincronização antes de continuar.");
+  }
 }
 function recordsRef(uid, storeName) {
   return collection(db, "users", uid, "crm", storeName, "records");
@@ -202,30 +221,32 @@ function installMemoryStorage(uid, key, initialValues) {
   localStorage.setItem = function(storageKey, value) {
     if (!stores[storageKey]) return originalSetItem(storageKey, value);
     memoryStores.set(storageKey, String(value));
+    const storeName = stores[storageKey];
     let records;
     try {
       records = JSON.parse(value);
       if (!Array.isArray(records)) throw new Error("O conteúdo não é uma lista.");
     } catch (error) {
-      setStatus("Erro ao preparar sincronização", "error");
+      writeErrors.add(storeName);
+      refreshWriteStatus();
+      setStatus("Erro ao preparar sincronização — alterações não confirmadas", "error");
       console.error("Dados não enviados à nuvem:", error);
       return;
     }
     pendingWrites += 1;
-    lastWriteError = false;
-    setStatus("Salvando na nuvem…", "busy");
-    const storeName = stores[storageKey];
+    refreshWriteStatus();
     const previous = queues.get(storeName) || Promise.resolve();
     const next = previous.catch(() => {}).then(() => writeEncryptedStore(uid, storeName, records, activeKey));
     queues.set(storeName, next);
     next.then(() => {
       pendingWrites = Math.max(0, pendingWrites - 1);
-      if (pendingWrites === 0 && !lastWriteError) setStatus("Dados criptografados e sincronizados", "ok");
+      writeErrors.delete(storeName);
+      refreshWriteStatus();
     }).catch((error) => {
       pendingWrites = Math.max(0, pendingWrites - 1);
-      lastWriteError = true;
+      writeErrors.add(storeName);
+      refreshWriteStatus();
       console.error("Falha ao sincronizar " + storeName + ":", error);
-      setStatus("Falha na nuvem — alterações ainda não confirmadas", "error");
     });
   };
 }
@@ -334,6 +355,7 @@ export async function initializeCloudData(uid, password, confirmation = "") {
   activeKey = key;
   queues = new Map();
   pendingWrites = 0;
+  writeErrors.clear();
   lastWriteError = false;
   installMemoryStorage(uid, key, initialValues);
   setStatus("Dados criptografados e sincronizados", "ok");
@@ -357,10 +379,7 @@ export async function changeEncryptionPassword(uid, currentPassword, newPassword
     throw fail("SAME_ENCRYPTION_PASSWORD", "A nova senha precisa ser diferente da senha atual.");
   }
 
-  await Promise.all([...queues.values()]);
-  if (lastWriteError) {
-    throw fail("SYNC_PENDING", "Há alterações que não foram confirmadas na nuvem. Resolva a sincronização antes de trocar a senha.");
-  }
+  await waitForPendingWrites();
 
   const securityDocument = securityRef(uid);
   const securitySnapshot = await getDoc(securityDocument);
@@ -501,8 +520,7 @@ export async function createEncryptedBackup(password) {
   if (typeof password !== "string" || password.length < 10) {
     throw fail("WEAK_BACKUP_PASSWORD", "Use uma senha de backup com pelo menos 10 caracteres.");
   }
-  await Promise.all([...queues.values()]);
-  if (lastWriteError) throw fail("SYNC_PENDING", "Há alterações que não foram confirmadas na nuvem. Verifique a sincronização antes de criar o backup.");
+  await waitForPendingWrites();
 
   const payload = {};
   for (const storageKey of Object.keys(stores)) {
@@ -537,7 +555,7 @@ export async function restoreEncryptedBackup(fileContents, password, uid) {
   if (typeof password !== "string" || password.length < 10) {
     throw fail("WEAK_BACKUP_PASSWORD", "Informe a senha usada para proteger este backup.");
   }
-  await Promise.all([...queues.values()]);
+  await waitForPendingWrites();
 
   let backup;
   try {
@@ -563,7 +581,7 @@ export async function restoreEncryptedBackup(fileContents, password, uid) {
   }
   // Older backups may not contain stores added in later CRM versions.
   // Treat those optional stores as empty during restore so valid older backups remain usable.
-  for (const storageKey of ["lr-interiores-parceiros-v1", "lr-interiores-comissoes-v1", "lr-interiores-equipe-v1", "lr-interiores-estoque-v1", "lr-interiores-lista-compras-v1"]) {
+  for (const storageKey of ["lr-interiores-parceiros-v1", "lr-interiores-comissoes-v1", "lr-interiores-equipe-v1", "lr-interiores-fornecedores-v1", "lr-interiores-estoque-v1", "lr-interiores-lista-compras-v1"]) {
     if (!Array.isArray(decoded.stores[storageKey])) decoded.stores[storageKey] = [];
   }
   validateBackupStores(decoded.stores);
@@ -575,6 +593,7 @@ export async function restoreEncryptedBackup(fileContents, password, uid) {
   for (const storageKey of Object.keys(stores)) {
     memoryStores.set(storageKey, JSON.stringify(decoded.stores[storageKey]));
   }
+  writeErrors.clear();
   lastWriteError = false;
   setStatus("Backup restaurado e sincronizado", "ok");
   return { createdAt: decoded.createdAt, counts: Object.fromEntries(
@@ -592,6 +611,7 @@ export function lockCloudData() {
   memoryStores.clear();
   queues.clear();
   pendingWrites = 0;
+  writeErrors.clear();
   lastWriteError = false;
   if (originalGetItem && originalSetItem && originalRemoveItem) {
     localStorage.getItem = originalGetItem;
