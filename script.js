@@ -3098,9 +3098,62 @@ function renderInventoryPurchaseList() {
   `).join("") : '<div class="list-empty">Nenhum material nesta categoria. Clique em “+ Adicionar material” para começar.</div>';
 }
 
+function renderInventoryPurchaseSupplierOptions(selectedId = $("#inventoryPurchaseSupplier").value) {
+  const select = $("#inventoryPurchaseSupplier");
+  const ordered = [...suppliers].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  select.innerHTML = '<option value="">Não selecionar fornecedor</option>' +
+    ordered.map((supplier) => `<option value="${escapeHTML(supplier.id)}">${escapeHTML(supplier.name)}</option>`).join("");
+  if (ordered.some((supplier) => supplier.id === selectedId)) select.value = selectedId;
+}
+
+function openInventoryPurchaseSupplierForm() {
+  $("#inventoryPurchaseSupplierForm").reset();
+  $("#inventoryPurchaseSupplierForm").hidden = false;
+  $("#inventoryPurchaseSupplierName").focus();
+}
+
+function closeInventoryPurchaseSupplierForm() {
+  $("#inventoryPurchaseSupplierForm").hidden = true;
+  $("#inventoryPurchaseSupplierForm").reset();
+}
+
+$("#inventoryPurchaseSupplierForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const name = $("#inventoryPurchaseSupplierName").value.trim();
+  const phone = $("#inventoryPurchaseSupplierPhone").value.trim();
+  const notes = $("#inventoryPurchaseSupplierNotes").value.trim();
+  if (!name) {
+    alert("Informe o nome do fornecedor.");
+    return;
+  }
+
+  const normalizedName = name.toLocaleLowerCase("pt-BR");
+  const duplicate = suppliers.find((item) => item.name.trim().toLocaleLowerCase("pt-BR") === normalizedName);
+  if (duplicate) {
+    renderInventoryPurchaseSupplierOptions(duplicate.id);
+    closeInventoryPurchaseSupplierForm();
+    alert("Este fornecedor já está cadastrado. Ele foi selecionado para o PDF.");
+    return;
+  }
+
+  const previous = [...suppliers];
+  const now = new Date().toISOString();
+  const supplier = { id: createId(), name, phone, notes, createdAt: now, updatedAt: now };
+  suppliers = [supplier, ...suppliers];
+  if (!saveSuppliers()) {
+    suppliers = previous;
+    return;
+  }
+  renderSuppliers();
+  renderInventoryPurchaseSupplierOptions(supplier.id);
+  closeInventoryPurchaseSupplierForm();
+});
+
 function exportInventoryPurchasePdf() {
   const category = $("#inventoryPurchaseCategoryFilter").value;
-  const supplier = $("#inventoryPurchaseSupplier").value.trim();
+  const selectedSupplier = suppliers.find((item) => item.id === $("#inventoryPurchaseSupplier").value);
+  const supplierName = selectedSupplier?.name || "";
+  const supplierPhone = selectedSupplier?.phone || "";
   const items = inventoryPurchaseItems.filter((item) =>
     item.status === "pendente" && (!category || item.category === category)
   ).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
@@ -3133,7 +3186,7 @@ th{background:#edf3ef;color:#173d32}footer{margin-top:24px;color:#718078;font-si
 @media print{body{margin:12mm}}
 </style></head><body>
 <header><h1>Lista de compras</h1><p>LR Interiores</p></header>
-<div class="meta"><span><strong>Fornecedor:</strong> ${escapeHTML(supplier || "Não informado")}</span>
+<div class="meta"><span><strong>Fornecedor:</strong> ${escapeHTML(supplierName || "Não informado")}</span>${supplierPhone ? `<span><strong>Telefone:</strong> ${escapeHTML(supplierPhone)}</span>` : ""}
 <span><strong>Categoria:</strong> ${escapeHTML(category || "Todas as categorias")}</span><span><strong>Data:</strong> ${today}</span></div>
 <table><thead><tr><th>Material</th><th>Categoria</th><th>Quantidade</th><th>Observações</th></tr></thead><tbody>${rows}</tbody></table>
 <footer>${items.length} ${items.length === 1 ? "item pendente" : "itens pendentes"} · Documento gerado pelo CRM LR Interiores</footer>
@@ -3348,6 +3401,9 @@ $("#cancelInventoryPurchaseBtn").addEventListener("click", closeInventoryPurchas
 $("#cancelInventoryPurchaseBtnBottom").addEventListener("click", closeInventoryPurchaseForm);
 $("#inventoryPurchaseCategoryFilter").addEventListener("change", renderInventoryPurchaseList);
 $("#exportInventoryPurchasePdfBtn").addEventListener("click", exportInventoryPurchasePdf);
+$("#newInventoryPurchaseSupplierBtn").addEventListener("click", openInventoryPurchaseSupplierForm);
+$("#cancelInventoryPurchaseSupplierBtn").addEventListener("click", closeInventoryPurchaseSupplierForm);
+$("#cancelInventoryPurchaseSupplierBtnBottom").addEventListener("click", closeInventoryPurchaseSupplierForm);
 
 $("#inventoryPurchaseForm").addEventListener("submit", (event) => {
   event.preventDefault();
