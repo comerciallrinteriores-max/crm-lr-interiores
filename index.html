@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#173d32">
   <title>CRM | LR Interiores</title>
-  <link rel="stylesheet" href="style.css?v=20261111-stock1">
+  <link rel="stylesheet" href="style.css?v=20261112-purchases2">
   <link rel="stylesheet" href="orcamentos.css?v=20261022-quote-client1">
   <link rel="stylesheet" href="vendas.css?v=20261015-2">
   <link rel="stylesheet" href="producao.css?v=20261016-production2">
   <link rel="stylesheet" href="financeiro.css?v=20261016-views1">
   <link rel="stylesheet" href="marketing.css?v=20261015-1">
-  <script type="module" src="firebase-auth.js?v=14"></script>
+  <script type="module" src="firebase-auth.js?v=16"></script>
   <script type="module" src="idle-lock.js?v=2"></script>
   <style>[hidden] { display: none !important; }</style>
 </head>
@@ -1019,6 +1019,7 @@
             <button type="button" class="inventory-view-tab active" data-inventory-view="stock" role="tab" aria-selected="true">Estoque</button>
             <button type="button" class="inventory-view-tab" data-inventory-view="general" role="tab" aria-selected="false">Matérias Gerais (gabarito)</button>
             <button type="button" class="inventory-view-tab" data-inventory-view="movements" role="tab" aria-selected="false">Movimentações</button>
+            <button type="button" class="inventory-view-tab" data-inventory-view="purchases" role="tab" aria-selected="false">Lista de compras</button>
           </div>
           <div class="list-toolbar">
             <div>
@@ -1029,6 +1030,69 @@
           </div>
           <p class="inventory-view-help" id="inventoryViewHelp">Consulte os saldos e registre entradas e saídas.</p>
           <div id="inventoryList" class="inventory-list"></div>
+          <div id="inventoryPurchasePanel" class="inventory-purchase-panel" hidden>
+            <div class="inventory-purchase-heading">
+              <div><h2>Materiais que precisam ser comprados</h2><p id="inventoryPurchaseCount">0 itens na lista</p></div>
+              <button type="button" class="button button-primary" id="newInventoryPurchaseBtn">+ Adicionar material</button>
+            </div>
+            <div class="inventory-purchase-filters">
+              <label>Filtrar por categoria
+                <select id="inventoryPurchaseCategoryFilter"><option value="">Todas as categorias</option></select>
+              </label>
+              <div class="inventory-purchase-supplier-field">
+                <label for="inventoryPurchaseSupplier">Fornecedor para o PDF</label>
+                <select id="inventoryPurchaseSupplier"><option value="">Não selecionar fornecedor</option></select>
+                <button type="button" class="button button-outline" id="newInventoryPurchaseSupplierBtn">+ Cadastrar fornecedor</button>
+              </div>
+              <button type="button" class="button button-outline" id="exportInventoryPurchasePdfBtn">Gerar PDF</button>
+            </div>
+            <form id="inventoryPurchaseSupplierForm" class="inventory-form inventory-purchase-supplier-form" hidden>
+              <div class="form-heading">
+                <div><h3>Novo fornecedor</h3><p>O cadastro também ficará disponível na área Fornecedores do CRM.</p></div>
+                <button type="button" class="button button-outline" id="cancelInventoryPurchaseSupplierBtn">Cancelar</button>
+              </div>
+              <div class="form-grid">
+                <label>Nome do fornecedor *<input id="inventoryPurchaseSupplierName" required maxlength="150" placeholder="Nome do fornecedor"></label>
+                <label>Telefone<input id="inventoryPurchaseSupplierPhone" maxlength="40" placeholder="Telefone ou WhatsApp"></label>
+                <label class="full-width">Observações<textarea id="inventoryPurchaseSupplierNotes" rows="2" maxlength="500" placeholder="Informações adicionais (opcional)"></textarea></label>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="button button-outline" id="cancelInventoryPurchaseSupplierBtnBottom">Cancelar</button>
+                <button type="submit" class="button button-primary">Salvar fornecedor</button>
+              </div>
+            </form>
+            <form id="inventoryPurchaseForm" class="inventory-form inventory-purchase-form" hidden>
+              <div class="form-heading">
+                <div><h3 id="inventoryPurchaseFormTitle">Adicionar material à lista</h3><p>Esta anotação não altera o estoque nem o gabarito de Matérias Gerais.</p></div>
+                <button type="button" class="button button-outline" id="cancelInventoryPurchaseBtn">Cancelar</button>
+              </div>
+              <input type="hidden" id="inventoryPurchaseId">
+              <div class="form-grid">
+                <label>Nome do material *
+                  <input id="inventoryPurchaseName" required maxlength="150" placeholder="Ex.: MDF Branco 15 mm">
+                </label>
+                <label>Categoria
+                  <input id="inventoryPurchaseCategory" list="inventoryPurchaseCategories" maxlength="80" placeholder="Ex.: MDF, ferragens, fitas">
+                  <datalist id="inventoryPurchaseCategories"></datalist>
+                </label>
+                <label>Quantidade *
+                  <input id="inventoryPurchaseQuantity" required maxlength="40" placeholder="Ex.: 5">
+                </label>
+                <label>Unidade
+                  <input id="inventoryPurchaseUnit" maxlength="30" placeholder="Ex.: chapas, metros, unidades">
+                </label>
+                <label class="full-width">Observações
+                  <textarea id="inventoryPurchaseNotes" rows="2" maxlength="500" placeholder="Medidas, cor, espessura ou detalhes para o fornecedor"></textarea>
+                </label>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="button button-outline" id="cancelInventoryPurchaseBtnBottom">Cancelar</button>
+                <button type="submit" class="button button-primary">Salvar na lista</button>
+              </div>
+            </form>
+            <div id="inventoryPurchaseList" class="inventory-purchase-list"></div>
+            <p class="inventory-purchase-note">O PDF considera somente os itens pendentes da categoria selecionada.</p>
+          </div>
         </div>
       </section>
 

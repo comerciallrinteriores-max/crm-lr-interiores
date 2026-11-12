@@ -1199,3 +1199,35 @@ textarea {
   .inventory-item-row, .inventory-movement-row { flex-wrap: wrap; }
   .inventory-item-actions { width: 100%; max-width: none; justify-content: flex-start; padding-top: 8px; border-top: 1px solid var(--border); }
 }
+
+
+/* ---------- Lista de compras do estoque ---------- */
+.inventory-purchase-panel{display:grid;gap:16px}
+.inventory-purchase-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.inventory-purchase-heading h2{margin:0;color:var(--green);font-size:16px}
+.inventory-purchase-heading p{margin:5px 0 0;color:var(--muted);font-size:12px}
+.inventory-purchase-filters{display:grid;grid-template-columns:minmax(160px,1fr) minmax(200px,1.3fr) auto;align-items:end;gap:12px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.inventory-purchase-filters label{display:grid;gap:6px;color:var(--text);font-size:12px;font-weight:600}
+.inventory-purchase-supplier-field{display:grid;gap:6px;min-width:0}
+.inventory-purchase-supplier-field>label{color:var(--text);font-size:12px;font-weight:600}
+.inventory-purchase-supplier-field select{width:100%;min-width:0}
+.inventory-purchase-supplier-field .button{justify-self:start;padding:7px 10px;font-size:11px}
+.inventory-purchase-supplier-form{margin:0}
+.inventory-purchase-supplier-form h3{margin:0;color:var(--green);font-size:15px}
+.inventory-purchase-filters input,.inventory-purchase-filters select{width:100%;min-width:0}
+.inventory-purchase-form{margin:0}
+.inventory-purchase-form h3{margin:0;color:var(--green);font-size:15px}
+.inventory-purchase-list{display:grid;gap:10px}
+.inventory-purchase-row{display:flex;align-items:flex-start;gap:12px;min-width:0;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.inventory-purchase-row.is-purchased .inventory-row-info>strong{color:var(--muted);text-decoration:line-through}
+.inventory-purchase-status{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:10px;background:var(--green-light);color:var(--green);font-size:18px;font-weight:700}
+.inventory-purchase-row.is-purchased .inventory-purchase-status{background:#edf0ee;color:#64736b}
+.inventory-purchase-badge{padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.inventory-purchase-badge.pendente{background:#fff1e8;color:#a75b2b}
+.inventory-purchase-badge.comprado{background:#edf0ee;color:#64736b}
+.inventory-purchase-note{margin:-4px 0 0;color:var(--muted);font-size:11px}
+@media(max-width:760px){
+ .inventory-purchase-filters{grid-template-columns:1fr}
+ .inventory-purchase-heading{align-items:flex-start;flex-direction:column}
+ .inventory-purchase-row{flex-wrap:wrap}
+}

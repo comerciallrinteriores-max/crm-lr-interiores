@@ -3000,8 +3000,200 @@ $("#supplierList").addEventListener("click", (event) => {
 
 /* ---------- Materiais e produtos (estoque) ---------- */
 const INVENTORY_STORAGE_KEY = "lr-interiores-estoque-v1";
+const INVENTORY_PURCHASE_STORAGE_KEY = "lr-interiores-lista-compras-v1";
 let inventoryItems = loadInventoryItems();
+let inventoryPurchaseItems = loadInventoryPurchaseItems();
 let inventoryView = "stock";
+
+function loadInventoryPurchaseItems() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(INVENTORY_PURCHASE_STORAGE_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && typeof item.id === "string" && typeof item.name === "string")
+      .map((item) => ({
+        ...item,
+        name: item.name.trim(),
+        category: typeof item.category === "string" ? item.category : "",
+        quantity: typeof item.quantity === "string" ? item.quantity : String(item.quantity ?? ""),
+        unit: typeof item.unit === "string" ? item.unit : "",
+        notes: typeof item.notes === "string" ? item.notes : "",
+        status: item.status === "comprado" ? "comprado" : "pendente",
+        createdAt: item.createdAt || new Date().toISOString(),
+        updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+      }));
+  } catch (error) {
+    console.error("Não foi possível carregar a lista de compras:", error);
+    return [];
+  }
+}
+
+function saveInventoryPurchaseItems() {
+  try {
+    localStorage.setItem(INVENTORY_PURCHASE_STORAGE_KEY, JSON.stringify(inventoryPurchaseItems));
+    return true;
+  } catch (error) {
+    console.error("Não foi possível salvar a lista de compras:", error);
+    alert("Não foi possível preparar a lista de compras para sincronização. Confira a conexão com o Firebase e tente novamente.");
+    return false;
+  }
+}
+
+function openInventoryPurchaseForm(item = null) {
+  const form = $("#inventoryPurchaseForm");
+  form.reset();
+  $("#inventoryPurchaseId").value = item?.id || "";
+  $("#inventoryPurchaseFormTitle").textContent = item ? "Editar material da lista" : "Adicionar material à lista";
+  $("#inventoryPurchaseName").value = item?.name || "";
+  $("#inventoryPurchaseCategory").value = item?.category || "";
+  $("#inventoryPurchaseQuantity").value = item?.quantity || "";
+  $("#inventoryPurchaseUnit").value = item?.unit || "";
+  $("#inventoryPurchaseNotes").value = item?.notes || "";
+  form.hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#inventoryPurchaseName").focus({ preventScroll: true });
+}
+
+function closeInventoryPurchaseForm() {
+  $("#inventoryPurchaseForm").hidden = true;
+  $("#inventoryPurchaseForm").reset();
+  $("#inventoryPurchaseId").value = "";
+}
+
+function renderInventoryPurchaseList() {
+  renderInventoryPurchaseSupplierOptions();
+  const categoryFilter = $("#inventoryPurchaseCategoryFilter");
+  const selectedCategory = categoryFilter.value;
+  const categories = [...new Set(inventoryPurchaseItems.map((item) => item.category.trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
+  categoryFilter.innerHTML = '<option value="">Todas as categorias</option>' +
+    categories.map((category) => `<option value="${escapeHTML(category)}">${escapeHTML(category)}</option>`).join("");
+  if (categories.includes(selectedCategory)) categoryFilter.value = selectedCategory;
+
+  $("#inventoryPurchaseCategories").innerHTML = categories
+    .map((category) => `<option value="${escapeHTML(category)}"></option>`).join("");
+
+  const filtered = inventoryPurchaseItems.filter((item) =>
+    !categoryFilter.value || item.category === categoryFilter.value
+  ).sort((a, b) => {
+    if (a.status !== b.status) return a.status === "pendente" ? -1 : 1;
+    return a.name.localeCompare(b.name, "pt-BR");
+  });
+  const pendingCount = inventoryPurchaseItems.filter((item) => item.status === "pendente").length;
+  $("#inventoryPurchaseCount").textContent = `${inventoryPurchaseItems.length} ${inventoryPurchaseItems.length === 1 ? "item" : "itens"} na lista · ${pendingCount} pendentes`;
+
+  $("#inventoryPurchaseList").innerHTML = filtered.length ? filtered.map((item) => `
+    <article class="inventory-purchase-row ${item.status === "comprado" ? "is-purchased" : ""}">
+      <div class="inventory-purchase-status" aria-hidden="true">${item.status === "comprado" ? "✓" : "○"}</div>
+      <div class="inventory-row-info">
+        <div class="inventory-item-heading"><strong>${escapeHTML(item.name)}</strong><span class="inventory-purchase-badge ${item.status}">${item.status === "comprado" ? "Comprado" : "Pendente"}</span></div>
+        <span>${escapeHTML(item.category || "Sem categoria")} · ${escapeHTML([item.quantity, item.unit].filter(Boolean).join(" "))}</span>
+        ${item.notes ? `<small>${escapeHTML(item.notes)}</small>` : ""}
+      </div>
+      <div class="inventory-item-actions">
+        <button type="button" class="button button-outline" data-purchase-edit="${escapeHTML(item.id)}">Editar</button>
+        <button type="button" class="button button-outline" data-purchase-toggle="${escapeHTML(item.id)}">${item.status === "comprado" ? "Voltar para pendente" : "Marcar comprado"}</button>
+        <button type="button" class="button button-danger" data-purchase-delete="${escapeHTML(item.id)}">Excluir</button>
+      </div>
+    </article>
+  `).join("") : '<div class="list-empty">Nenhum material nesta categoria. Clique em “+ Adicionar material” para começar.</div>';
+}
+
+function renderInventoryPurchaseSupplierOptions(selectedId = $("#inventoryPurchaseSupplier").value) {
+  const select = $("#inventoryPurchaseSupplier");
+  const ordered = [...suppliers].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  select.innerHTML = '<option value="">Não selecionar fornecedor</option>' +
+    ordered.map((supplier) => `<option value="${escapeHTML(supplier.id)}">${escapeHTML(supplier.name)}</option>`).join("");
+  if (ordered.some((supplier) => supplier.id === selectedId)) select.value = selectedId;
+}
+
+function openInventoryPurchaseSupplierForm() {
+  $("#inventoryPurchaseSupplierForm").reset();
+  $("#inventoryPurchaseSupplierForm").hidden = false;
+  $("#inventoryPurchaseSupplierName").focus();
+}
+
+function closeInventoryPurchaseSupplierForm() {
+  $("#inventoryPurchaseSupplierForm").hidden = true;
+  $("#inventoryPurchaseSupplierForm").reset();
+}
+
+$("#inventoryPurchaseSupplierForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const name = $("#inventoryPurchaseSupplierName").value.trim();
+  const phone = $("#inventoryPurchaseSupplierPhone").value.trim();
+  const notes = $("#inventoryPurchaseSupplierNotes").value.trim();
+  if (!name) {
+    alert("Informe o nome do fornecedor.");
+    return;
+  }
+
+  const normalizedName = name.toLocaleLowerCase("pt-BR");
+  const duplicate = suppliers.find((item) => item.name.trim().toLocaleLowerCase("pt-BR") === normalizedName);
+  if (duplicate) {
+    renderInventoryPurchaseSupplierOptions(duplicate.id);
+    closeInventoryPurchaseSupplierForm();
+    alert("Este fornecedor já está cadastrado. Ele foi selecionado para o PDF.");
+    return;
+  }
+
+  const previous = [...suppliers];
+  const now = new Date().toISOString();
+  const supplier = { id: createId(), name, phone, notes, createdAt: now, updatedAt: now };
+  suppliers = [supplier, ...suppliers];
+  if (!saveSuppliers()) {
+    suppliers = previous;
+    return;
+  }
+  renderSuppliers();
+  renderInventoryPurchaseSupplierOptions(supplier.id);
+  closeInventoryPurchaseSupplierForm();
+});
+
+function exportInventoryPurchasePdf() {
+  const category = $("#inventoryPurchaseCategoryFilter").value;
+  const selectedSupplier = suppliers.find((item) => item.id === $("#inventoryPurchaseSupplier").value);
+  const supplierName = selectedSupplier?.name || "";
+  const supplierPhone = selectedSupplier?.phone || "";
+  const items = inventoryPurchaseItems.filter((item) =>
+    item.status === "pendente" && (!category || item.category === category)
+  ).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+
+  if (!items.length) {
+    alert("Não há itens pendentes para gerar o PDF com este filtro.");
+    return;
+  }
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    alert("O navegador bloqueou a abertura do PDF. Permita pop-ups para este CRM e tente novamente.");
+    return;
+  }
+
+  const rows = items.map((item) => `
+    <tr><td>${escapeHTML(item.name)}</td><td>${escapeHTML(item.category || "—")}</td><td>${escapeHTML([item.quantity, item.unit].filter(Boolean).join(" "))}</td><td>${escapeHTML(item.notes || "—")}</td></tr>
+  `).join("");
+  const today = new Intl.DateTimeFormat("pt-BR").format(new Date());
+  printWindow.document.open();
+  printWindow.document.write(`<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lista de compras - LR Interiores</title>
+<style>
+*{box-sizing:border-box}body{margin:32px;color:#263b33;font:13px Arial,sans-serif}
+header{padding-bottom:16px;border-bottom:2px solid #173d32;margin-bottom:22px}
+h1{margin:0 0 7px;color:#173d32;font-size:22px}p{margin:5px 0;color:#586b62}
+.meta{display:flex;flex-wrap:wrap;gap:18px;margin:16px 0}
+table{width:100%;border-collapse:collapse}th,td{padding:10px 9px;border:1px solid #d7dfda;text-align:left;vertical-align:top}
+th{background:#edf3ef;color:#173d32}footer{margin-top:24px;color:#718078;font-size:11px}
+@media print{body{margin:12mm}}
+</style></head><body>
+<header><h1>Lista de compras</h1><p>LR Interiores</p></header>
+<div class="meta"><span><strong>Fornecedor:</strong> ${escapeHTML(supplierName || "Não informado")}</span>${supplierPhone ? `<span><strong>Telefone:</strong> ${escapeHTML(supplierPhone)}</span>` : ""}
+<span><strong>Categoria:</strong> ${escapeHTML(category || "Todas as categorias")}</span><span><strong>Data:</strong> ${today}</span></div>
+<table><thead><tr><th>Material</th><th>Categoria</th><th>Quantidade</th><th>Observações</th></tr></thead><tbody>${rows}</tbody></table>
+<footer>${items.length} ${items.length === 1 ? "item pendente" : "itens pendentes"} · Documento gerado pelo CRM LR Interiores</footer>
+<script>window.onload=()=>window.print();</script></body></html>`);
+  printWindow.document.close();
+}
 
 function loadInventoryItems() {
   try {
@@ -3110,7 +3302,7 @@ function closeInventoryMovementForm() {
 }
 
 function setInventoryView(view) {
-  if (!["stock", "general", "movements"].includes(view)) return;
+  if (!["stock", "general", "movements", "purchases"].includes(view)) return;
   inventoryView = view;
   $("#inventorySearch").value = "";
   renderInventory();
@@ -3128,6 +3320,17 @@ function renderInventory() {
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
   });
+
+  const purchaseMode = inventoryView === "purchases";
+  $("#newInventoryItemBtn").hidden = purchaseMode;
+  $("#inventoryList").closest(".inventory-list-card").querySelector(".list-toolbar").hidden = purchaseMode;
+  $("#inventoryViewHelp").hidden = purchaseMode;
+  $("#inventoryList").hidden = purchaseMode;
+  $("#inventoryPurchasePanel").hidden = !purchaseMode;
+  if (purchaseMode) {
+    renderInventoryPurchaseList();
+    return;
+  }
 
   const list = $("#inventoryList");
   if (inventoryView === "movements") {
@@ -3192,6 +3395,80 @@ $("#cancelInventoryMovementBtnBottom").addEventListener("click", closeInventoryM
 $("#inventorySearch").addEventListener("input", renderInventory);
 $$(".inventory-view-tab").forEach((button) => {
   button.addEventListener("click", () => setInventoryView(button.dataset.inventoryView));
+});
+
+$("#newInventoryPurchaseBtn").addEventListener("click", () => openInventoryPurchaseForm());
+$("#cancelInventoryPurchaseBtn").addEventListener("click", closeInventoryPurchaseForm);
+$("#cancelInventoryPurchaseBtnBottom").addEventListener("click", closeInventoryPurchaseForm);
+$("#inventoryPurchaseCategoryFilter").addEventListener("change", renderInventoryPurchaseList);
+$("#exportInventoryPurchasePdfBtn").addEventListener("click", exportInventoryPurchasePdf);
+$("#newInventoryPurchaseSupplierBtn").addEventListener("click", openInventoryPurchaseSupplierForm);
+$("#cancelInventoryPurchaseSupplierBtn").addEventListener("click", closeInventoryPurchaseSupplierForm);
+$("#cancelInventoryPurchaseSupplierBtnBottom").addEventListener("click", closeInventoryPurchaseSupplierForm);
+
+$("#inventoryPurchaseForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const id = $("#inventoryPurchaseId").value;
+  const name = $("#inventoryPurchaseName").value.trim();
+  const quantity = $("#inventoryPurchaseQuantity").value.trim();
+  if (!name || !quantity) {
+    alert("Informe o nome do material e a quantidade necessária.");
+    return;
+  }
+  const existing = inventoryPurchaseItems.find((item) => item.id === id);
+  const previous = [...inventoryPurchaseItems];
+  const now = new Date().toISOString();
+  const record = {
+    id: id || createId(),
+    name,
+    category: $("#inventoryPurchaseCategory").value.trim(),
+    quantity,
+    unit: $("#inventoryPurchaseUnit").value.trim(),
+    notes: $("#inventoryPurchaseNotes").value.trim(),
+    status: existing?.status || "pendente",
+    createdAt: existing?.createdAt || now,
+    updatedAt: now
+  };
+  inventoryPurchaseItems = existing
+    ? inventoryPurchaseItems.map((item) => item.id === id ? record : item)
+    : [record, ...inventoryPurchaseItems];
+  if (!saveInventoryPurchaseItems()) {
+    inventoryPurchaseItems = previous;
+    return;
+  }
+  closeInventoryPurchaseForm();
+  renderInventoryPurchaseList();
+});
+
+$("#inventoryPurchaseList").addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-purchase-edit]");
+  const toggleButton = event.target.closest("[data-purchase-toggle]");
+  const deleteButton = event.target.closest("[data-purchase-delete]");
+  if (editButton) {
+    const item = inventoryPurchaseItems.find((entry) => entry.id === editButton.dataset.purchaseEdit);
+    if (item) openInventoryPurchaseForm(item);
+    return;
+  }
+  if (toggleButton) {
+    const item = inventoryPurchaseItems.find((entry) => entry.id === toggleButton.dataset.purchaseToggle);
+    if (!item) return;
+    const previous = [...inventoryPurchaseItems];
+    inventoryPurchaseItems = inventoryPurchaseItems.map((entry) => entry.id === item.id
+      ? { ...entry, status: entry.status === "comprado" ? "pendente" : "comprado", updatedAt: new Date().toISOString() }
+      : entry
+    );
+    if (!saveInventoryPurchaseItems()) inventoryPurchaseItems = previous;
+    renderInventoryPurchaseList();
+    return;
+  }
+  if (deleteButton) {
+    const item = inventoryPurchaseItems.find((entry) => entry.id === deleteButton.dataset.purchaseDelete);
+    if (!item || !confirm(`Deseja excluir "${item.name}" da lista de compras?`)) return;
+    const previous = [...inventoryPurchaseItems];
+    inventoryPurchaseItems = inventoryPurchaseItems.filter((entry) => entry.id !== item.id);
+    if (!saveInventoryPurchaseItems()) inventoryPurchaseItems = previous;
+    renderInventoryPurchaseList();
+  }
 });
 
 $("#inventoryItemForm").addEventListener("submit", (event) => {
