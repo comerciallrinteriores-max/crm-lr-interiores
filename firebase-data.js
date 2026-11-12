@@ -586,10 +586,49 @@ export async function restoreEncryptedBackup(fileContents, password, uid) {
   }
   validateBackupStores(decoded.stores);
 
-  // Validate every store before writing anything. If interrupted, importing the same backup again is safe.
-  for (const [storageKey, storeName] of Object.entries(stores)) {
-    await writeEncryptedStore(uid, storeName, decoded.stores[storageKey], activeKey);
+  // Keep a validated copy of the current state so a failed multi-store restore can be rolled back.
+  const previousStores = {};
+  for (const storageKey of Object.keys(stores)) {
+    let currentRecords;
+    try {
+      currentRecords = JSON.parse(memoryStores.get(storageKey) ?? "[]");
+    } catch {
+      throw fail("INVALID_LOCAL_DATA", "Não foi possível validar os dados atuais de " + stores[storageKey] + ". A restauração não foi iniciada.");
+    }
+    if (!Array.isArray(currentRecords)) {
+      throw fail("INVALID_LOCAL_DATA", "Formato inválido nos dados atuais de " + stores[storageKey] + ". A restauração não foi iniciada.");
+    }
+    previousStores[storageKey] = currentRecords;
   }
+  validateBackupStores(previousStores);
+
+  const attemptedStores = [];
+  try {
+    for (const [storageKey, storeName] of Object.entries(stores)) {
+      // Include the current store before writing: a failed batch may have partially committed.
+      attemptedStores.push([storageKey, storeName]);
+      await writeEncryptedStore(uid, storeName, decoded.stores[storageKey], activeKey);
+    }
+  } catch (restoreError) {
+    let rollbackFailed = false;
+    for (const [storageKey, storeName] of attemptedStores.reverse()) {
+      try {
+        await writeEncryptedStore(uid, storeName, previousStores[storageKey], activeKey);
+      } catch (rollbackError) {
+        rollbackFailed = true;
+        console.error("Falha ao reverter a restauração de " + storeName + ":", rollbackError);
+      }
+    }
+    if (rollbackFailed) {
+      activeKey = null;
+      lastWriteError = true;
+      setStatus("Restauração interrompida — estado da nuvem incerto. Não feche nem atualize o CRM; procure suporte.", "error");
+      throw fail("RESTORE_RECOVERY_REQUIRED", "A restauração falhou e não foi possível reverter todos os módulos. Não feche nem atualize o CRM e não faça novas alterações. Mantenha esta página aberta e procure suporte.");
+    }
+    setStatus("Restauração não concluída. Os dados anteriores foram preservados.", "error");
+    throw fail("RESTORE_ROLLED_BACK", "A restauração não foi concluída. Os dados anteriores foram restaurados e preservados. Verifique a conexão antes de tentar novamente.");
+  }
+
   for (const storageKey of Object.keys(stores)) {
     memoryStores.set(storageKey, JSON.stringify(decoded.stores[storageKey]));
   }
