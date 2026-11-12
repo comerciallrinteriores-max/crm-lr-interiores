@@ -334,6 +334,7 @@ backupFileInput?.addEventListener("change", async () => {
   restoreBackupButton.disabled = true;
   createBackupButton.disabled = true;
   if (crmApp) crmApp.inert = true;
+  let restoreRecoveryRequired = false;
   setBackupStatus("Validando o backup e restaurando os dados…");
   try {
     const contents = await file.text();
@@ -354,6 +355,10 @@ backupFileInput?.addEventListener("change", async () => {
     window.setTimeout(() => window.location.reload(), 1200);
   } catch (error) {
     console.error("Falha ao restaurar backup:", error.code || error.message);
+    if (error.code === "RESTORE_RECOVERY_REQUIRED") {
+      restoreRecoveryRequired = true;
+      if (crmApp) crmApp.inert = true;
+    }
     const messages = {
       "WRONG_BACKUP_PASSWORD": "Senha de backup incorreta ou arquivo danificado. Os dados atuais não foram substituídos.",
       "INVALID_BACKUP_FILE": error.message,
@@ -361,11 +366,13 @@ backupFileInput?.addEventListener("change", async () => {
       "INVALID_BACKUP_CONTENT": error.message,
       "WEAK_BACKUP_PASSWORD": error.message,
       "CRM_LOCKED": "Desbloqueie o CRM antes de restaurar.",
-      "SYNC_PENDING": error.message
+      "SYNC_PENDING": error.message,
+      "RESTORE_ROLLED_BACK": error.message,
+      "RESTORE_RECOVERY_REQUIRED": error.message
     };
     setBackupStatus(messages[error.code] || error.message || "Não foi possível restaurar o backup.", true);
   } finally {
-    if (crmApp) crmApp.inert = false;
+    if (crmApp && !restoreRecoveryRequired) crmApp.inert = false;
     restoreBackupButton.disabled = false;
     createBackupButton.disabled = false;
   }
