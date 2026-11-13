@@ -296,6 +296,10 @@ function startCloudRevisionWatchers(uid) {
       const localUpdatedAt = Number(storeUpdatedAt.get(storeName) || 0);
       if (remoteRevision < localRevision ||
           (remoteRevision === localRevision && remoteUpdatedAt <= localUpdatedAt)) return;
+      if ((pendingWritesByStore.get(storeName) || 0) > 0 && remoteRevision === localRevision) {
+        storeUpdatedAt.set(storeName, remoteUpdatedAt);
+        return;
+      }
 
       if ((pendingWritesByStore.get(storeName) || 0) > 0 || hasVisibleEditor()) {
         staleStores.add(storeName);
