@@ -39,6 +39,7 @@ let queues = new Map();
 let pendingWrites = 0;
 let lastWriteError = false;
 let storeRevisions = new Map();
+let storeUpdatedAt = new Map();
 let pendingWritesByStore = new Map();
 let syncUnsubscribers = [];
 const staleStores = new Set();
@@ -168,6 +169,7 @@ async function readCloudStore(uid, storeName, key) {
   return {
     initialized: meta.exists() && meta.data().initialized === true,
     revision: meta.exists() ? Number(meta.data().revision || 0) : 0,
+    updatedAt: meta.exists() ? Number(meta.data().updatedAt?.toMillis?.() || 0) : 0,
     records: records.map((entry) => entry.record),
     rawRecords: records
   };
@@ -212,9 +214,11 @@ async function writeEncryptedStore(uid, storeName, records, key) {
     initialized: true, encryptionVersion: 1, revision: nextRevision, updatedAt: serverTimestamp()
   }, { merge: true });
   storeRevisions.set(storeName, nextRevision);
+  const savedMeta = await getDoc(metaRef(uid, storeName));
+  storeUpdatedAt.set(storeName, Number(savedMeta.data()?.updatedAt?.toMillis?.() || 0));
 }
 
-async function writeEncryptedStoreSafely(uid, storeName, records, key, expectedRevision) {
+async function writeEncryptedStoreSafely(uid, storeName, records, key, expectedRevision, expectedUpdatedAt) {
   if (!Array.isArray(records)) throw new Error("Formato inválido para " + storeName + ".");
   const collectionRef = recordsRef(uid, storeName);
   const prepared = [];
@@ -239,7 +243,8 @@ async function writeEncryptedStoreSafely(uid, storeName, records, key, expectedR
     const existingSnapshot = await transaction.get(collectionRef);
     const currentRevision = Number(metadataSnapshot.exists() ? metadataSnapshot.data().revision || 0 : 0);
 
-    if (currentRevision !== expectedRevision) {
+    const currentUpdatedAt = Number(metadataSnapshot.exists() ? metadataSnapshot.data().updatedAt?.toMillis?.() || 0 : 0);
+    if (currentRevision !== expectedRevision || currentUpdatedAt !== expectedUpdatedAt) {
       throw fail("SYNC_CONFLICT", "Este módulo foi atualizado em outro computador. Atualize o CRM antes de continuar.");
     }
 
@@ -261,6 +266,8 @@ async function writeEncryptedStoreSafely(uid, storeName, records, key, expectedR
   });
 
   storeRevisions.set(storeName, revision);
+  const savedMeta = await getDoc(metaRef(uid, storeName));
+  storeUpdatedAt.set(storeName, Number(savedMeta.data()?.updatedAt?.toMillis?.() || 0));
   return revision;
 }
 
@@ -275,9 +282,13 @@ function startCloudRevisionWatchers(uid) {
   stopCloudRevisionWatchers();
   for (const storeName of Object.values(stores)) {
     const unsubscribe = onSnapshot(metaRef(uid, storeName), (snapshot) => {
-      const remoteRevision = Number(snapshot.exists() ? snapshot.data().revision || 0 : 0);
+      const metadata = snapshot.exists() ? snapshot.data() : null;
+      const remoteRevision = Number(metadata?.revision || 0);
+      const remoteUpdatedAt = Number(metadata?.updatedAt?.toMillis?.() || 0);
       const localRevision = Number(storeRevisions.get(storeName) || 0);
-      if (remoteRevision <= localRevision) return;
+      const localUpdatedAt = Number(storeUpdatedAt.get(storeName) || 0);
+      if (remoteRevision < localRevision ||
+          (remoteRevision === localRevision && remoteUpdatedAt <= localUpdatedAt)) return;
 
       if ((pendingWritesByStore.get(storeName) || 0) > 0 || document.querySelector("#crmApp form:not([hidden])")) {
         staleStores.add(storeName);
@@ -301,6 +312,7 @@ function startCloudRevisionWatchers(uid) {
         if (!storageKey) return;
         memoryStores.set(storageKey, JSON.stringify(latest.records));
         storeRevisions.set(storeName, latest.revision);
+        storeUpdatedAt.set(storeName, latest.updatedAt);
         staleStores.delete(storeName);
         writeErrors.delete(storeName);
         refreshWriteStatus();
@@ -355,7 +367,11 @@ function installMemoryStorage(uid, key, initialValues) {
     refreshWriteStatus();
     const previous = queues.get(storeName) || Promise.resolve();
     const next = previous.catch(() => {}).then(() =>
-      writeEncryptedStoreSafely(uid, storeName, records, activeKey, Number(storeRevisions.get(storeName) || 0))
+      writeEncryptedStoreSafely(
+        uid, storeName, records, activeKey,
+        Number(storeRevisions.get(storeName) || 0),
+        Number(storeUpdatedAt.get(storeName) || 0)
+      )
     );
     queues.set(storeName, next);
     next.then(() => {
@@ -462,6 +478,7 @@ export async function initializeCloudData(uid, password, confirmation = "") {
 
     if (cloudAlreadyCanonical) {
       storeRevisions.set(storeName, cloud.revision);
+      storeUpdatedAt.set(storeName, cloud.updatedAt);
       if (startupDiagnosticsEnabled()) {
         console.info("[CRM startup]", "cloud-write-skipped:" + storeName, {
           records: records.length,
@@ -482,6 +499,7 @@ export async function initializeCloudData(uid, password, confirmation = "") {
   activeKey = key;
   queues = new Map();
   storeRevisions = new Map();
+  storeUpdatedAt = new Map();
   pendingWritesByStore = new Map();
   staleStores.clear();
   stopCloudRevisionWatchers();
@@ -780,6 +798,7 @@ export function isCloudDataSafeToLock() {
 export function lockCloudData() {
   stopCloudRevisionWatchers();
   storeRevisions.clear();
+  storeUpdatedAt.clear();
   pendingWritesByStore.clear();
   staleStores.clear();
   activeKey = null;
