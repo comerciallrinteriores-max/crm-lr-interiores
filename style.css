@@ -1235,3 +1235,52 @@ textarea {
 /* Recibos e ações de recebimento */
 .finance-row-actions { display:flex; flex-wrap:wrap; gap:6px; }
 .finance-row-actions .button { font-size:11px; padding:7px 9px; }
+
+
+/* Organização da visão geral do Painel inicial */
+.dashboard-section {
+  margin-top: 26px;
+}
+.dashboard-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 14px;
+}
+.dashboard-section-heading h2 {
+  margin: 0;
+  color: var(--green);
+  font-size: 17px;
+  font-weight: 700;
+}
+.dashboard-section-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dashboard-business-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.dashboard-finance-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.dashboard-attention-metrics {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 1200px) {
+  .dashboard-business-grid,
+  .dashboard-finance-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .dashboard-section { margin-top: 22px; }
+  .dashboard-section-heading { margin-bottom: 11px; }
+  .dashboard-section-heading h2 { font-size: 15px; }
+  .dashboard-business-grid,
+  .dashboard-finance-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}

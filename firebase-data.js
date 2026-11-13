@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
 import {
-  getFirestore, collection, doc, getDoc, getDocs, setDoc, writeBatch, serverTimestamp
+  getFirestore, collection, doc, getDoc, getDocs, setDoc, writeBatch, serverTimestamp,
+  runTransaction, onSnapshot
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -37,6 +38,12 @@ let originalRemoveItem = null;
 let queues = new Map();
 let pendingWrites = 0;
 let lastWriteError = false;
+let storeRevisions = new Map();
+let storeUpdatedAt = new Map();
+let pendingWritesByStore = new Map();
+let suppressRemoteUpdates = false;
+let syncUnsubscribers = [];
+const staleStores = new Set();
 const writeErrors = new Set();
 
 function startupDiagnosticsEnabled() {
@@ -60,7 +67,7 @@ function setStatus(message, state = "ok") {
   element.setAttribute("aria-live", "polite");
 }
 function refreshWriteStatus() {
-  lastWriteError = writeErrors.size > 0;
+  lastWriteError = writeErrors.size > 0 || staleStores.size > 0;
   if (pendingWrites > 0) {
     setStatus(lastWriteError
       ? "Salvando na nuvem… há alterações anteriores não confirmadas"
@@ -74,7 +81,7 @@ function refreshWriteStatus() {
 async function waitForPendingWrites() {
   await Promise.all([...queues.values()].map((queue) => queue.catch(() => {})));
   if (lastWriteError) {
-    throw fail("SYNC_PENDING", "Há alterações que não foram confirmadas na nuvem. Resolva a sincronização antes de continuar.");
+    throw fail("SYNC_PENDING", "Há alterações pendentes ou atualizações de outro computador que precisam ser carregadas antes de continuar.");
   }
 }
 function recordsRef(uid, storeName) {
@@ -162,6 +169,8 @@ async function readCloudStore(uid, storeName, key) {
   records.sort((a, b) => a.position - b.position);
   return {
     initialized: meta.exists() && meta.data().initialized === true,
+    revision: meta.exists() ? Number(meta.data().revision || 0) : 0,
+    updatedAt: meta.exists() ? Number(meta.data().updatedAt?.toMillis?.() || 0) : 0,
     records: records.map((entry) => entry.record),
     rawRecords: records
   };
@@ -170,6 +179,8 @@ async function readCloudStore(uid, storeName, key) {
 async function writeEncryptedStore(uid, storeName, records, key) {
   if (!Array.isArray(records)) throw new Error("Formato inválido para " + storeName + ".");
   const collectionRef = recordsRef(uid, storeName);
+  const currentMeta = await getDoc(metaRef(uid, storeName));
+  const nextRevision = Number(currentMeta.exists() ? currentMeta.data().revision || 0 : 0) + 1;
   const existing = await getDocs(collectionRef);
   const nextIds = new Set();
   const operations = [];
@@ -201,8 +212,137 @@ async function writeEncryptedStore(uid, storeName, records, key) {
     await batch.commit();
   }
   await setDoc(metaRef(uid, storeName), {
-    initialized: true, encryptionVersion: 1, updatedAt: serverTimestamp()
+    initialized: true, encryptionVersion: 1, revision: nextRevision, updatedAt: serverTimestamp()
   }, { merge: true });
+  storeRevisions.set(storeName, nextRevision);
+  const savedMeta = await getDoc(metaRef(uid, storeName));
+  storeUpdatedAt.set(storeName, Number(savedMeta.data()?.updatedAt?.toMillis?.() || 0));
+}
+
+async function writeEncryptedStoreSafely(uid, storeName, records, key, expectedRevision, expectedUpdatedAt) {
+  if (!Array.isArray(records)) throw new Error("Formato inválido para " + storeName + ".");
+  const collectionRef = recordsRef(uid, storeName);
+  const prepared = [];
+  const nextIds = new Set();
+
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    if (!record || typeof record.id !== "string" || !record.id) {
+      throw new Error("Foi encontrado um registro sem identificador em " + storeName + ".");
+    }
+    if (nextIds.has(record.id)) throw new Error("Identificador duplicado em " + storeName + ".");
+    nextIds.add(record.id);
+    const encrypted = await encryptText(key, JSON.stringify(record));
+    prepared.push({
+      ref: doc(collectionRef, record.id),
+      data: { encrypted: true, ...encrypted, position: index, updatedAt: serverTimestamp() }
+    });
+  }
+
+  const revision = await runTransaction(db, async (transaction) => {
+    const metadataSnapshot = await transaction.get(metaRef(uid, storeName));
+    const existingSnapshot = await transaction.get(collectionRef);
+    const currentRevision = Number(metadataSnapshot.exists() ? metadataSnapshot.data().revision || 0 : 0);
+
+    const currentUpdatedAt = Number(metadataSnapshot.exists() ? metadataSnapshot.data().updatedAt?.toMillis?.() || 0 : 0);
+    if (currentRevision !== expectedRevision || currentUpdatedAt !== expectedUpdatedAt) {
+      throw fail("SYNC_CONFLICT", "Este módulo foi atualizado em outro computador. Atualize o CRM antes de continuar.");
+    }
+
+    const deletions = existingSnapshot.docs.filter((item) => !nextIds.has(item.id));
+    if (prepared.length + deletions.length + 1 > 450) {
+      throw fail("SYNC_STORE_TOO_LARGE", "Este módulo tem registros demais para uma gravação sincronizada segura. Nenhuma alteração foi enviada.");
+    }
+
+    prepared.forEach((item) => transaction.set(item.ref, item.data));
+    deletions.forEach((item) => transaction.delete(item.ref));
+    const next = currentRevision + 1;
+    transaction.set(metaRef(uid, storeName), {
+      initialized: true,
+      encryptionVersion: 1,
+      revision: next,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    return next;
+  });
+
+  storeRevisions.set(storeName, revision);
+  const savedMeta = await getDoc(metaRef(uid, storeName));
+  storeUpdatedAt.set(storeName, Number(savedMeta.data()?.updatedAt?.toMillis?.() || 0));
+  return revision;
+}
+
+function stopCloudRevisionWatchers() {
+  syncUnsubscribers.forEach((unsubscribe) => {
+    try { unsubscribe(); } catch (error) { console.warn("Não foi possível encerrar um observador de sincronização:", error); }
+  });
+  syncUnsubscribers = [];
+}
+
+function hasVisibleEditor() {
+  return Array.from(document.querySelectorAll("#crmApp form:not([hidden])"))
+    .some((form) => form.getClientRects().length > 0);
+}
+
+function startCloudRevisionWatchers(uid) {
+  stopCloudRevisionWatchers();
+  for (const storeName of Object.values(stores)) {
+    const unsubscribe = onSnapshot(metaRef(uid, storeName), (snapshot) => {
+      if (suppressRemoteUpdates) return;
+      const metadata = snapshot.exists() ? snapshot.data() : null;
+      const remoteRevision = Number(metadata?.revision || 0);
+      const remoteUpdatedAt = Number(metadata?.updatedAt?.toMillis?.() || 0);
+      const localRevision = Number(storeRevisions.get(storeName) || 0);
+      const localUpdatedAt = Number(storeUpdatedAt.get(storeName) || 0);
+      if (remoteRevision < localRevision ||
+          (remoteRevision === localRevision && remoteUpdatedAt <= localUpdatedAt)) return;
+      if ((pendingWritesByStore.get(storeName) || 0) > 0 && remoteRevision === localRevision) {
+        storeUpdatedAt.set(storeName, remoteUpdatedAt);
+        return;
+      }
+
+      if ((pendingWritesByStore.get(storeName) || 0) > 0 || hasVisibleEditor()) {
+        staleStores.add(storeName);
+        refreshWriteStatus();
+        setStatus("Outro computador atualizou " + storeName + ". Feche o formulário e atualize a página para carregar os dados.", "error");
+        window.dispatchEvent(new CustomEvent("crm-cloud-conflict", {
+          detail: { storeName, revision: remoteRevision }
+        }));
+        return;
+      }
+
+      void readCloudStore(uid, storeName, activeKey).then((latest) => {
+        if (!activeKey || (pendingWritesByStore.get(storeName) || 0) > 0 ||
+            hasVisibleEditor()) {
+          staleStores.add(storeName);
+          refreshWriteStatus();
+          setStatus("Outro computador atualizou " + storeName + ". Atualize a página antes de continuar.", "error");
+          return;
+        }
+        const storageKey = Object.keys(stores).find((key) => stores[key] === storeName);
+        if (!storageKey) return;
+        memoryStores.set(storageKey, JSON.stringify(latest.records));
+        storeRevisions.set(storeName, latest.revision);
+        storeUpdatedAt.set(storeName, latest.updatedAt);
+        staleStores.delete(storeName);
+        writeErrors.delete(storeName);
+        refreshWriteStatus();
+        if (!lastWriteError) setStatus("Dados atualizados de outro computador", "ok");
+        window.dispatchEvent(new CustomEvent("crm-cloud-store-updated", {
+          detail: { storageKey, revision: latest.revision }
+        }));
+      }).catch((error) => {
+        console.error("Não foi possível carregar a atualização de " + storeName + ":", error);
+        staleStores.add(storeName);
+        refreshWriteStatus();
+        setStatus("Não foi possível carregar uma atualização de outro computador. Atualize a página.", "error");
+      });
+    }, (error) => {
+      console.error("Falha ao acompanhar sincronização de " + storeName + ":", error);
+      setStatus("Não foi possível acompanhar as atualizações de outro computador.", "error");
+    });
+    syncUnsubscribers.push(unsubscribe);
+  }
 }
 
 function installMemoryStorage(uid, key, initialValues) {
@@ -234,19 +374,32 @@ function installMemoryStorage(uid, key, initialValues) {
       return;
     }
     pendingWrites += 1;
+    pendingWritesByStore.set(storeName, (pendingWritesByStore.get(storeName) || 0) + 1);
     refreshWriteStatus();
     const previous = queues.get(storeName) || Promise.resolve();
-    const next = previous.catch(() => {}).then(() => writeEncryptedStore(uid, storeName, records, activeKey));
+    const next = previous.catch(() => {}).then(() =>
+      writeEncryptedStoreSafely(
+        uid, storeName, records, activeKey,
+        Number(storeRevisions.get(storeName) || 0),
+        Number(storeUpdatedAt.get(storeName) || 0)
+      )
+    );
     queues.set(storeName, next);
     next.then(() => {
       pendingWrites = Math.max(0, pendingWrites - 1);
+      pendingWritesByStore.set(storeName, Math.max(0, (pendingWritesByStore.get(storeName) || 1) - 1));
       writeErrors.delete(storeName);
       refreshWriteStatus();
     }).catch((error) => {
       pendingWrites = Math.max(0, pendingWrites - 1);
+      pendingWritesByStore.set(storeName, Math.max(0, (pendingWritesByStore.get(storeName) || 1) - 1));
       writeErrors.add(storeName);
       refreshWriteStatus();
-      console.error("Falha ao sincronizar " + storeName + ":", error);
+      if (error?.code === "SYNC_CONFLICT") {
+        setStatus("Conflito de sincronização em " + storeName + ". Atualize a página para carregar os dados mais recentes.", "error");
+      } else {
+        console.error("Falha ao sincronizar " + storeName + ":", error);
+      }
     });
   };
 }
@@ -301,6 +454,11 @@ export async function initializeCloudData(uid, password, confirmation = "") {
     await setDoc(securityDocument, security);
   }
 
+  stopCloudRevisionWatchers();
+  storeRevisions = new Map();
+  storeUpdatedAt = new Map();
+  pendingWritesByStore = new Map();
+  staleStores.clear();
   const initialValues = {};
   for (const [storageKey, storeName] of Object.entries(stores)) {
     const localText = localStorage.getItem(storageKey);
@@ -335,6 +493,8 @@ export async function initializeCloudData(uid, password, confirmation = "") {
       );
 
     if (cloudAlreadyCanonical) {
+      storeRevisions.set(storeName, cloud.revision);
+      storeUpdatedAt.set(storeName, cloud.updatedAt);
       if (startupDiagnosticsEnabled()) {
         console.info("[CRM startup]", "cloud-write-skipped:" + storeName, {
           records: records.length,
@@ -358,6 +518,7 @@ export async function initializeCloudData(uid, password, confirmation = "") {
   writeErrors.clear();
   lastWriteError = false;
   installMemoryStorage(uid, key, initialValues);
+  startCloudRevisionWatchers(uid);
   setStatus("Dados criptografados e sincronizados", "ok");
   logStartupTiming("initialize-cloud-data-total", startupStartedAt, {
     stores: Object.keys(stores).length
@@ -415,6 +576,7 @@ export async function changeEncryptionPassword(uid, currentPassword, newPassword
   const writtenStores = [];
   let metadataUpdateAttempted = false;
 
+  suppressRemoteUpdates = true;
   setStatus("Alterando a senha e recriptografando os dados…", "busy");
   try {
     for (const [storageKey, storeName] of Object.entries(stores)) {
@@ -491,6 +653,10 @@ export async function changeEncryptionPassword(uid, currentPassword, newPassword
     activeKey = oldKey;
     setStatus("A troca de senha falhou; os dados foram mantidos com a senha antiga.", "error");
     throw fail("PASSWORD_CHANGE_FAILED", "Não foi possível concluir a troca. Os dados foram revertidos para a senha antiga. Verifique a conexão e tente novamente.");
+  } finally {
+    suppressRemoteUpdates = false;
+    if (activeKey) startCloudRevisionWatchers(uid);
+    else stopCloudRevisionWatchers();
   }
 }
 
@@ -603,6 +769,7 @@ export async function restoreEncryptedBackup(fileContents, password, uid) {
   validateBackupStores(previousStores);
 
   const attemptedStores = [];
+  suppressRemoteUpdates = true;
   try {
     for (const [storageKey, storeName] of Object.entries(stores)) {
       // Include the current store before writing: a failed batch may have partially committed.
@@ -627,6 +794,10 @@ export async function restoreEncryptedBackup(fileContents, password, uid) {
     }
     setStatus("Restauração não concluída. Os dados anteriores foram preservados.", "error");
     throw fail("RESTORE_ROLLED_BACK", "A restauração não foi concluída. Os dados anteriores foram restaurados e preservados. Verifique a conexão antes de tentar novamente.");
+  } finally {
+    suppressRemoteUpdates = false;
+    if (activeKey) startCloudRevisionWatchers(uid);
+    else stopCloudRevisionWatchers();
   }
 
   for (const storageKey of Object.keys(stores)) {
@@ -646,6 +817,11 @@ export function isCloudDataSafeToLock() {
 }
 
 export function lockCloudData() {
+  stopCloudRevisionWatchers();
+  storeRevisions.clear();
+  storeUpdatedAt.clear();
+  pendingWritesByStore.clear();
+  staleStores.clear();
   activeKey = null;
   memoryStores.clear();
   queues.clear();
