@@ -443,6 +443,11 @@ export async function initializeCloudData(uid, password, confirmation = "") {
     await setDoc(securityDocument, security);
   }
 
+  stopCloudRevisionWatchers();
+  storeRevisions = new Map();
+  storeUpdatedAt = new Map();
+  pendingWritesByStore = new Map();
+  staleStores.clear();
   const initialValues = {};
   for (const [storageKey, storeName] of Object.entries(stores)) {
     const localText = localStorage.getItem(storageKey);
@@ -498,11 +503,6 @@ export async function initializeCloudData(uid, password, confirmation = "") {
   await setDoc(securityDocument, { initialized: true, updatedAt: serverTimestamp() }, { merge: true });
   activeKey = key;
   queues = new Map();
-  storeRevisions = new Map();
-  storeUpdatedAt = new Map();
-  pendingWritesByStore = new Map();
-  staleStores.clear();
-  stopCloudRevisionWatchers();
   pendingWrites = 0;
   writeErrors.clear();
   lastWriteError = false;
