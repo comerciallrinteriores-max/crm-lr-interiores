@@ -168,10 +168,16 @@
             <small>Despesas ainda pendentes</small>
           </article>
           <article class="stat-card dashboard-metric-card">
-            <span class="stat-icon">⚒</span>
-            <span class="stat-label">Produções atrasadas</span>
-            <strong id="dashboardOverdueProduction">0</strong>
-            <small>Pedidos com prazo vencido</small>
+            <span class="stat-icon">⚒</span><span class="stat-label">Produções atrasadas</span>
+            <strong id="dashboardOverdueProduction">0</strong><small>Pedidos com prazo vencido</small>
+          </article>
+          <article class="stat-card dashboard-metric-card">
+            <span class="stat-icon">↓</span><span class="stat-label">Custo total dos aprovados</span>
+            <strong id="dashboardApprovedQuoteCost">R$ 0,00</strong><small>Orçamentos aprovados no mês</small>
+          </article>
+          <article class="stat-card dashboard-metric-card">
+            <span class="stat-icon">↗</span><span class="stat-label">Lucro estimado dos aprovados</span>
+            <strong id="dashboardApprovedQuoteProfit">R$ 0,00</strong><small>Orçamentos aprovados no mês</small>
           </article>
         </div>
         <div class="content-card">
@@ -814,18 +820,16 @@
             <label>Vencimento / data prevista *
               <input id="financeDueDate" type="date" required>
             </label>
-            <label id="financeStatusField">Status
-              <select id="financeStatus">
-                <option value="pending">Pendente</option>
-                <option value="paid">Pago / recebido</option>
-              </select>
+            <label id="financeStatusField">Status da despesa
+              <select id="financeStatus"><option value="pending">Pendente</option><option value="paid">Pago</option></select>
             </label>
-            <label id="financePaidDateField">Data do pagamento / recebimento
-              <input id="financePaidDate" type="date">
-            </label>
+            <label id="financePaidDateField">Data do pagamento / recebimento<input id="financePaidDate" type="date"></label>
             <label id="financePaidAmountField" hidden>Valor recebido nesta parcela (R$)
-              <input id="financePaidAmount" type="number" min="0" step="0.01" value="0" placeholder="0,00">
-              <span class="finance-field-help">Informe apenas o valor deste pagamento. O sistema somará as parcelas e calculará o saldo restante.</span>
+              <input id="financePaidAmount" type="number" min="0" step="0.01" placeholder="0,00">
+              <span class="finance-field-help">Informe somente o valor que entrou nesta parcela. Para deixar pendente, mantenha zero ou em branco.</span>
+            </label>
+            <label id="financePaymentMethodField" hidden>Forma de pagamento
+              <select id="financePaymentMethod"><option value="">Não informada</option><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option>Transferência</option><option>Boleto</option><option>Outro</option></select>
             </label>
             <div id="financeLinkedSaleInfo" class="finance-linked-sale-info full-width" hidden></div>
             <label>Cliente relacionado
