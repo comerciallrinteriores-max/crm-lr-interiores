@@ -41,6 +41,7 @@ let lastWriteError = false;
 let storeRevisions = new Map();
 let storeUpdatedAt = new Map();
 let pendingWritesByStore = new Map();
+let suppressRemoteUpdates = false;
 let syncUnsubscribers = [];
 const staleStores = new Set();
 const writeErrors = new Set();
@@ -282,6 +283,7 @@ function startCloudRevisionWatchers(uid) {
   stopCloudRevisionWatchers();
   for (const storeName of Object.values(stores)) {
     const unsubscribe = onSnapshot(metaRef(uid, storeName), (snapshot) => {
+      if (suppressRemoteUpdates) return;
       const metadata = snapshot.exists() ? snapshot.data() : null;
       const remoteRevision = Number(metadata?.revision || 0);
       const remoteUpdatedAt = Number(metadata?.updatedAt?.toMillis?.() || 0);
@@ -565,6 +567,7 @@ export async function changeEncryptionPassword(uid, currentPassword, newPassword
   const writtenStores = [];
   let metadataUpdateAttempted = false;
 
+  suppressRemoteUpdates = true;
   setStatus("Alterando a senha e recriptografando os dados…", "busy");
   try {
     for (const [storageKey, storeName] of Object.entries(stores)) {
@@ -641,6 +644,10 @@ export async function changeEncryptionPassword(uid, currentPassword, newPassword
     activeKey = oldKey;
     setStatus("A troca de senha falhou; os dados foram mantidos com a senha antiga.", "error");
     throw fail("PASSWORD_CHANGE_FAILED", "Não foi possível concluir a troca. Os dados foram revertidos para a senha antiga. Verifique a conexão e tente novamente.");
+  } finally {
+    suppressRemoteUpdates = false;
+    if (activeKey) startCloudRevisionWatchers(uid);
+    else stopCloudRevisionWatchers();
   }
 }
 
@@ -753,6 +760,7 @@ export async function restoreEncryptedBackup(fileContents, password, uid) {
   validateBackupStores(previousStores);
 
   const attemptedStores = [];
+  suppressRemoteUpdates = true;
   try {
     for (const [storageKey, storeName] of Object.entries(stores)) {
       // Include the current store before writing: a failed batch may have partially committed.
@@ -777,6 +785,10 @@ export async function restoreEncryptedBackup(fileContents, password, uid) {
     }
     setStatus("Restauração não concluída. Os dados anteriores foram preservados.", "error");
     throw fail("RESTORE_ROLLED_BACK", "A restauração não foi concluída. Os dados anteriores foram restaurados e preservados. Verifique a conexão antes de tentar novamente.");
+  } finally {
+    suppressRemoteUpdates = false;
+    if (activeKey) startCloudRevisionWatchers(uid);
+    else stopCloudRevisionWatchers();
   }
 
   for (const storageKey of Object.keys(stores)) {
