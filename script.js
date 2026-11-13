@@ -651,10 +651,10 @@ function renderDashboard() {
 
   const currentMonth = localISODate().slice(0, 7);
   const openSales = sales.filter((sale) => !["won", "lost"].includes(sale.stage));
-  const receivedThisMonth = financeEntries.reduce(
-    (sum, entry) => sum + financeReceivedInMonth(entry, currentMonth),
-    0
-  );
+  const approvedQuotesThisMonth = quotes.filter((quote) => quote.status === "Aprovado" && typeof quote.createdAt === "string" && quote.createdAt.slice(0, 7) === currentMonth);
+  $("#dashboardApprovedQuoteCost").textContent = formatBRL(approvedQuotesThisMonth.reduce((sum, quote) => sum + Math.max(0, Number(quote.totalCost) || 0), 0));
+  $("#dashboardApprovedQuoteProfit").textContent = formatBRL(approvedQuotesThisMonth.reduce((sum, quote) => sum + (Number(quote.profit) || 0), 0));
+  const receivedThisMonth = financeEntries.reduce((sum, entry) => sum + financeReceivedInMonth(entry, currentMonth), 0);
   $("#dashboardOpenSales").textContent = openSales.length;
   $("#dashboardReceivedMonth").textContent = formatBRL(receivedThisMonth);
 
@@ -2359,22 +2359,14 @@ function loadFinanceEntries() {
     ).map((entry) => {
       const amount = Math.max(0, Number(entry.amount) || 0);
       const saleId = typeof entry.saleId === "string" ? entry.saleId : "";
-      const payments = saleId && Array.isArray(entry.payments)
-        ? entry.payments.filter((payment) =>
-            payment && Number(payment.amount) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(payment.date || "")
-          ).map((payment) => ({
-            amount: Math.max(0, Number(payment.amount) || 0),
-            date: payment.date
-          }))
-        : (saleId && Number(entry.paidAmount) > 0
-          ? [{ amount: Math.max(0, Number(entry.paidAmount) || 0), date: entry.paidDate || entry.dueDate }]
-          : []);
-      const paidAmount = saleId
-        ? Math.min(amount, payments.reduce((sum, payment) => sum + payment.amount, 0))
-        : (entry.status === "paid" ? amount : 0);
-      const status = saleId
-        ? (paidAmount >= amount && amount > 0 ? "paid" : paidAmount > 0 ? "partial" : "pending")
-        : (entry.status === "paid" ? "paid" : "pending");
+      let payments = Array.isArray(entry.payments)
+        ? entry.payments.filter((payment) => payment && Number(payment.amount) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(payment.date || ""))
+          .map((payment) => ({ id: payment.id || createId(), amount: Math.round(Math.max(0, Number(payment.amount) || 0) * 100) / 100, date: payment.date, method: payment.method || "" }))
+        : [];
+      if (!payments.length && entry.type !== "expense" && entry.status === "paid" && !saleId) payments = [{ id: createId(), amount, date: entry.paidDate || entry.dueDate || localISODate(), method: "" }];
+      else if (!payments.length && saleId && Number(entry.paidAmount) > 0) payments = [{ id: createId(), amount: Math.max(0, Number(entry.paidAmount) || 0), date: entry.paidDate || entry.dueDate || localISODate(), method: "" }];
+      const paidAmount = entry.type === "expense" ? Math.max(0, Number(entry.paidAmount) || 0) : Math.min(amount, payments.reduce((sum, payment) => sum + payment.amount, 0));
+      const status = entry.type === "expense" ? (entry.status === "paid" ? "paid" : "pending") : (paidAmount >= amount && amount > 0 ? "paid" : paidAmount > 0 ? "partial" : "pending");
       return {
         ...entry,
         type: entry.type === "expense" ? "expense" : "income",
@@ -2420,25 +2412,15 @@ function financeEffectiveDate(entry) {
 
 function financeReceivedInMonth(entry, month) {
   if (entry.type !== "income") return 0;
-  if (!entry.saleId) {
-    return entry.status === "paid" && financeEffectiveDate(entry).startsWith(month) ? entry.amount : 0;
-  }
-  return (entry.payments || []).reduce((sum, payment) =>
-    payment.date.startsWith(month) ? sum + payment.amount : sum, 0);
+  return (entry.payments || []).reduce((sum, payment) => String(payment.date || "").startsWith(month) ? sum + (Number(payment.amount) || 0) : sum, 0);
 }
-
 function financeReceivedAmount(entry) {
   if (entry.type !== "income") return 0;
-  return entry.saleId
-    ? Math.min(entry.amount, Math.max(0, Number(entry.paidAmount) || 0))
-    : (entry.status === "paid" ? entry.amount : 0);
+  return Math.min(entry.amount, Math.max(0, (entry.payments || []).reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0)));
 }
-
 function financeOutstandingAmount(entry) {
   if (entry.type !== "income") return 0;
-  return entry.saleId
-    ? Math.max(0, entry.amount - financeReceivedAmount(entry))
-    : (entry.status === "paid" ? 0 : entry.amount);
+  return Math.max(0, entry.amount - financeReceivedAmount(entry));
 }
 
 function formatFinanceDate(dateValue) {
@@ -2467,19 +2449,20 @@ function openFinanceForm(entry = null) {
   $("#financeStatus").value = entry?.status === "paid" ? "paid" : "pending";
   $("#financePaidDate").value = localISODate();
   $("#financePaidAmount").value = "";
+  $("#financePaymentMethod").value = "";
   $("#financeNotes").value = entry?.notes || "";
   renderFinanceClientOptions(entry?.clientId || "");
-
   const linkedSale = Boolean(entry?.saleId);
-  $("#financePaidAmountField").hidden = !linkedSale;
-  $("#financeStatusField").hidden = linkedSale;
+  const isIncome = (entry?.type || $("#financeType").value) === "income";
+  $("#financePaidAmountField").hidden = !isIncome;
+  $("#financePaymentMethodField").hidden = !isIncome;
+  $("#financeStatusField").hidden = isIncome;
   $("#financePaidDateField").hidden = false;
-  $("#financePaidAmount").max = entry ? String(entry.amount) : "";
+  const alreadyReceived = entry ? financeReceivedAmount(entry) : 0;
+  $("#financePaidAmount").max = entry ? String(Math.max(0, entry.amount - alreadyReceived)) : "";
   const linkedInfo = $("#financeLinkedSaleInfo");
   linkedInfo.hidden = !linkedSale;
-  if (linkedSale) {
-    linkedInfo.textContent = "Venda vinculada ao Funil. O valor total é o valor previsto da venda; informe quanto o cliente já pagou. O saldo restante será calculado automaticamente.";
-  }
+  if (linkedSale) linkedInfo.textContent = "Venda vinculada ao Funil. Informe apenas o valor recebido nesta parcela. O saldo restante será calculado automaticamente.";
   form.hidden = false;
   form.scrollIntoView({ behavior: "smooth", block: "start" });
   $("#financeDescription").focus({ preventScroll: true });
@@ -2490,6 +2473,7 @@ function closeFinanceForm() {
   $("#financeId").value = "";
   $("#financeForm").hidden = true;
   $("#financePaidAmountField").hidden = true;
+  $("#financePaymentMethodField").hidden = true;
   $("#financeStatusField").hidden = false;
   $("#financePaidDateField").hidden = false;
   $("#financeLinkedSaleInfo").hidden = true;
@@ -2605,6 +2589,25 @@ function financeEntryMatchesView(entry, view) {
   return true;
 }
 
+function printPaymentReceipt(entryId, paymentId) {
+  const entry = financeEntries.find((item) => item.id === entryId), payment = entry?.payments?.find((item) => item.id === paymentId);
+  if (!entry || entry.type !== "income" || !payment || !(Number(payment.amount) > 0)) { alert("Não foi possível localizar este recebimento."); return; }
+  const clientName = entry.clientName || clients.find((item) => item.id === entry.clientId)?.name || "Cliente não informado";
+  const sale = sales.find((item) => item.id === entry.saleId), quote = quotes.find((item) => item.id === (entry.quoteId || sale?.quoteId));
+  const win = window.open("", "_blank", "width=820,height=700");
+  if (!win) { alert("O navegador bloqueou a janela do recibo. Permita pop-ups para o CRM e tente novamente."); return; }
+  win.document.open();
+  win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Recibo - LR Interiores</title><style>
+  *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#24382d;margin:0;padding:36px}.receipt{max-width:720px;margin:auto;border:1px solid #cbd8cf;padding:36px;border-radius:12px}header{display:flex;justify-content:space-between;border-bottom:2px solid #244b3b;padding-bottom:18px}h1{margin:0;color:#244b3b;font-size:25px}.amount{margin:28px 0;padding:20px;background:#f2f7f3;text-align:center;border-radius:9px}.amount small{display:block}.amount strong{display:block;margin-top:8px;font-size:30px;color:#244b3b}.details{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:24px 0}.field small{display:block;color:#718078;font-size:11px;margin-bottom:5px}.field strong{font-size:14px;overflow-wrap:anywhere}.declaration{line-height:1.7;margin:22px 0}.signature{margin-top:58px;border-top:1px solid #aebbb2;width:240px;padding-top:8px;text-align:center;color:#69786f;font-size:12px}@media print{body{padding:0}.receipt{border:0;border-radius:0;padding:18mm;max-width:none}@page{margin:0}}
+  </style></head><body><main class="receipt"><header><div><h1>LR INTERIORES</h1><p>Recibo de pagamento</p></div><div>Recibo Nº<br><strong>${escapeHTML(String(payment.id || "").slice(-8).toUpperCase())}</strong></div></header>
+  <div class="amount"><small>Valor recebido</small><strong>${formatBRL(payment.amount)}</strong></div><div class="details">
+  <div class="field"><small>Recebemos de</small><strong>${escapeHTML(clientName)}</strong></div><div class="field"><small>Data do recebimento</small><strong>${formatFinanceDate(payment.date)}</strong></div>
+  <div class="field"><small>Projeto / orçamento</small><strong>${escapeHTML(quote?.name || sale?.title || entry.description)}</strong></div><div class="field"><small>Forma de pagamento</small><strong>${escapeHTML(payment.method || "Não informada")}</strong></div>
+  <div class="field"><small>Valor total</small><strong>${formatBRL(entry.amount)}</strong></div><div class="field"><small>Total recebido até agora</small><strong>${formatBRL(financeReceivedAmount(entry))}</strong></div></div>
+  <p class="declaration">Declaramos o recebimento do valor acima, referente ao pagamento identificado neste recibo.</p><div class="signature">LR Interiores</div></main><script>window.addEventListener("load",()=>window.print());</script></body></html>`);
+  win.document.close();
+}
+
 function renderFinance(searchTerm = $("#financeSearch").value) {
   syncWonSalesToFinance();
   syncPaidCommissionsToFinance();
@@ -2670,9 +2673,8 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
       ? (isIncome ? "Recebido" : "Pago")
       : entry.status === "partial" ? "Pago parcialmente" : (overdue ? "Atrasado" : "Pendente");
     const statusClass = entry.status === "paid" ? "paid" : entry.status === "partial" ? "partial" : overdue ? "overdue" : "pending";
-    const paymentDetails = entry.saleId
-      ? `<span>Recebido no total: <strong>${formatBRL(receivedAmount)}</strong></span><span>Restante: <strong>${formatBRL(outstanding)}</strong></span>`
-      : "";
+    const paymentDetails = isIncome ? `<span>Recebido no total: <strong>${formatBRL(receivedAmount)}</strong></span><span>Restante: <strong>${formatBRL(outstanding)}</strong></span>` : "";
+    const receiptButtons = isIncome ? (entry.payments || []).map((payment, index) => `<button type="button" class="button button-outline" data-finance-action="receipt" data-finance-id="${escapeHTML(entry.id)}" data-payment-id="${escapeHTML(payment.id)}">Recibo ${index + 1}</button>`).join("") : "";
     return `
       <article class="finance-row ${isIncome ? "finance-income" : "finance-expense"}">
         <div class="finance-row-icon" aria-hidden="true">${isIncome ? "↙" : "↗"}</div>
@@ -2693,7 +2695,8 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
         <div class="finance-row-side">
           <strong class="${isIncome ? "finance-positive" : "finance-negative"}">${isIncome ? "+" : "−"} ${formatBRL(entry.amount)}</strong>
           <div class="finance-row-actions">
-            ${entry.status !== "paid" ? `<button type="button" class="button button-outline" data-finance-action="mark-paid" data-finance-id="${escapeHTML(entry.id)}">${entry.saleId ? "Marcar quitado" : isIncome ? "Marcar recebido" : "Marcar pago"}</button>` : `<button type="button" class="button button-outline" data-finance-action="mark-pending" data-finance-id="${escapeHTML(entry.id)}">Reabrir pendência</button>`}
+            ${receiptButtons}
+            ${entry.status !== "paid" ? `<button type="button" class="button button-outline" data-finance-action="mark-paid" data-finance-id="${escapeHTML(entry.id)}">${isIncome ? "Marcar recebido" : "Marcar pago"}</button>` : (isIncome ? "" : `<button type="button" class="button button-outline" data-finance-action="mark-pending" data-finance-id="${escapeHTML(entry.id)}">Reabrir pendência</button>`)}
             <button type="button" class="button button-outline" data-finance-action="edit" data-finance-id="${escapeHTML(entry.id)}">Editar</button>
             <button type="button" class="button button-outline finance-delete" data-finance-action="delete" data-finance-id="${escapeHTML(entry.id)}">Excluir</button>
           </div>
@@ -2713,80 +2716,54 @@ $("#financeSearch").addEventListener("input", (event) => renderFinance(event.tar
 $("#financeMonth").value = localISODate().slice(0, 7);
 $("#financeMonth").addEventListener("change", () => renderFinance());
 $("#financeStatus").addEventListener("change", () => {
-  if ($("#financeStatus").value === "paid" && !$("#financePaidDate").value) {
-    $("#financePaidDate").value = localISODate();
-  }
+  if ($("#financeStatus").value === "paid" && !$("#financePaidDate").value) $("#financePaidDate").value = localISODate();
   if ($("#financeStatus").value === "pending") $("#financePaidDate").value = "";
+});
+$("#financeType").addEventListener("change", () => {
+  const isIncome = $("#financeType").value === "income";
+  $("#financePaidAmountField").hidden = !isIncome;
+  $("#financePaymentMethodField").hidden = !isIncome;
+  $("#financeStatusField").hidden = isIncome;
 });
 
 $("#financeForm").addEventListener("submit", (event) => {
   event.preventDefault();
-  const id = $("#financeId").value;
-  const description = $("#financeDescription").value.trim();
-  const amount = Number($("#financeAmount").value);
-  if (!description || !Number.isFinite(amount) || amount <= 0) {
-    alert("Informe uma descrição e um valor maior que zero.");
-    return;
-  }
-  const existing = financeEntries.find((entry) => entry.id === id);
-  const linkedSale = Boolean(existing?.saleId);
-  const clientId = $("#financeClient").value;
-  const client = clients.find((item) => item.id === clientId);
-  let paidAmount = 0;
-  let status = $("#financeStatus").value === "paid" ? "paid" : "pending";
-  let paidDate = status === "paid" ? ($("#financePaidDate").value || localISODate()) : "";
-  let newPaymentAmount = 0;
-  let payments = existing?.payments || [];
-  if (linkedSale) {
-    newPaymentAmount = Number($("#financePaidAmount").value || 0);
-    const alreadyReceived = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const id = $("#financeId").value, description = $("#financeDescription").value.trim(), amount = Number($("#financeAmount").value);
+  if (!description || !Number.isFinite(amount) || amount <= 0) { alert("Informe uma descrição e um valor maior que zero."); return; }
+  const existing = financeEntries.find((entry) => entry.id === id), type = $("#financeType").value === "expense" ? "expense" : "income";
+  const clientId = $("#financeClient").value, client = clients.find((item) => item.id === clientId);
+  let payments = Array.isArray(existing?.payments) ? [...existing.payments] : [], paidAmount = 0;
+  let status = type === "expense" && $("#financeStatus").value === "paid" ? "paid" : "pending";
+  let paidDate = type === "expense" && status === "paid" ? ($("#financePaidDate").value || localISODate()) : "";
+  if (type === "income") {
+    const newPaymentAmount = Math.round(Number($("#financePaidAmount").value || 0) * 100) / 100;
+    const alreadyReceived = payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
     if (!Number.isFinite(newPaymentAmount) || newPaymentAmount < 0 || alreadyReceived + newPaymentAmount > amount + 0.001) {
-      alert("O valor desta parcela não pode ultrapassar o saldo restante da venda.");
-      $("#financePaidAmount").focus();
-      return;
+      alert("O valor recebido nesta parcela não pode ultrapassar o saldo restante."); $("#financePaidAmount").focus(); return;
     }
-    newPaymentAmount = Math.round(newPaymentAmount * 100) / 100;
-    if (newPaymentAmount > 0) {
-      const paymentDate = $("#financePaidDate").value || localISODate();
-      payments = [...payments, { amount: newPaymentAmount, date: paymentDate }];
-    }
-    paidAmount = Math.min(amount, payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0));
+    if (newPaymentAmount > 0) payments.push({ id: createId(), amount: newPaymentAmount, date: $("#financePaidDate").value || localISODate(), method: $("#financePaymentMethod").value || "" });
+    paidAmount = Math.min(amount, payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0));
     status = paidAmount >= amount ? "paid" : paidAmount > 0 ? "partial" : "pending";
     paidDate = payments.length ? payments[payments.length - 1].date : "";
-  }
+  } else paidAmount = status === "paid" ? amount : 0;
   const entry = {
-    id: id || createId(),
-    saleId: existing?.saleId || "",
-    type: $("#financeType").value === "expense" ? "expense" : "income",
-    description,
-    category: $("#financeCategory").value,
-    amount: Math.round(amount * 100) / 100,
-    paidAmount: linkedSale ? paidAmount : 0,
-    payments: linkedSale ? payments : [],
-    dueDate: $("#financeDueDate").value,
-    status,
-    paidDate,
-    clientId,
-    clientName: client ? client.name : "",
-    notes: $("#financeNotes").value.trim(),
-    createdAt: existing?.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    id: id || createId(), saleId: existing?.saleId || "", quoteId: existing?.quoteId || "", type,
+    description, category: $("#financeCategory").value, amount: Math.round(amount * 100) / 100,
+    paidAmount, payments: type === "income" ? payments : [], dueDate: $("#financeDueDate").value, status, paidDate,
+    clientId, clientName: client ? client.name : "", notes: $("#financeNotes").value.trim(),
+    createdAt: existing?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString()
   };
   const previousEntries = [...financeEntries];
-  if (id) financeEntries = financeEntries.map((item) => item.id === id ? entry : item);
-  else financeEntries.unshift(entry);
-  if (!saveFinanceEntries()) {
-    financeEntries = previousEntries;
-    return;
-  }
-  closeFinanceForm();
-  renderFinance();
+  if (id) financeEntries = financeEntries.map((item) => item.id === id ? entry : item); else financeEntries.unshift(entry);
+  if (!saveFinanceEntries()) { financeEntries = previousEntries; return; }
+  closeFinanceForm(); renderFinance();
   alert(id ? "Lançamento atualizado com sucesso!" : "Lançamento salvo com sucesso!");
 });
 
 $("#financeList").addEventListener("click", (event) => {
   const button = event.target.closest("[data-finance-action]");
   if (!button) return;
+  if (button.dataset.financeAction === "receipt") { printPaymentReceipt(button.dataset.financeId, button.dataset.paymentId); return; }
   const entry = financeEntries.find((item) => item.id === button.dataset.financeId);
   if (!entry) return;
   const action = button.dataset.financeAction;
@@ -2821,26 +2798,16 @@ $("#financeList").addEventListener("click", (event) => {
   const previousEntries = [...financeEntries];
   financeEntries = financeEntries.map((item) => {
     if (item.id !== entry.id) return item;
-    if (action === "mark-paid") return {
-      ...item,
-      status: "paid",
-      paidAmount: item.saleId ? item.amount : item.paidAmount,
-      payments: item.saleId
-        ? [...(item.payments || []), ...(item.amount > Number(item.paidAmount || 0)
-          ? [{ amount: Math.round((item.amount - Number(item.paidAmount || 0)) * 100) / 100, date: localISODate() }]
-          : [])]
-        : (item.payments || []),
-      paidDate: localISODate(),
-      updatedAt: new Date().toISOString()
-    };
-    if (action === "mark-pending") return {
-      ...item,
-      status: "pending",
-      paidAmount: item.saleId ? 0 : item.paidAmount,
-      payments: item.saleId ? [] : (item.payments || []),
-      paidDate: "",
-      updatedAt: new Date().toISOString()
-    };
+    if (action === "mark-paid") {
+      if (item.type === "income") {
+        const remaining = Math.max(0, item.amount - financeReceivedAmount(item));
+        const payments = remaining > 0 ? [...(item.payments || []), { id: createId(), amount: Math.round(remaining * 100) / 100, date: localISODate(), method: "" }] : (item.payments || []);
+        const received = payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+        return { ...item, status: received >= item.amount ? "paid" : received > 0 ? "partial" : "pending", paidAmount: Math.min(item.amount, received), payments, paidDate: localISODate(), updatedAt: new Date().toISOString() };
+      }
+      return { ...item, status: "paid", paidAmount: item.amount, paidDate: localISODate(), updatedAt: new Date().toISOString() };
+    }
+    if (action === "mark-pending") return { ...item, status: "pending", paidAmount: 0, paidDate: "", updatedAt: new Date().toISOString() };
     return item;
   });
   if (!saveFinanceEntries()) {
