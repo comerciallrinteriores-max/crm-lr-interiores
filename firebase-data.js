@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
 import {
-  getFirestore, collection, doc, getDoc, getDocs, setDoc, writeBatch, serverTimestamp
+  getFirestore, collection, doc, getDoc, getDocs, setDoc, writeBatch, serverTimestamp,
+  runTransaction, onSnapshot
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -37,6 +38,8 @@ let originalRemoveItem = null;
 let queues = new Map();
 let pendingWrites = 0;
 let lastWriteError = false;
+let storeRevisions = new Map();
+let syncUnsubscribers = [];
 const writeErrors = new Set();
 
 function startupDiagnosticsEnabled() {
@@ -162,6 +165,7 @@ async function readCloudStore(uid, storeName, key) {
   records.sort((a, b) => a.position - b.position);
   return {
     initialized: meta.exists() && meta.data().initialized === true,
+    revision: meta.exists() ? Number(meta.data().revision || 0) : 0,
     records: records.map((entry) => entry.record),
     rawRecords: records
   };
@@ -170,6 +174,8 @@ async function readCloudStore(uid, storeName, key) {
 async function writeEncryptedStore(uid, storeName, records, key) {
   if (!Array.isArray(records)) throw new Error("Formato inválido para " + storeName + ".");
   const collectionRef = recordsRef(uid, storeName);
+  const currentMeta = await getDoc(metaRef(uid, storeName));
+  const nextRevision = Number(currentMeta.exists() ? currentMeta.data().revision || 0 : 0) + 1;
   const existing = await getDocs(collectionRef);
   const nextIds = new Set();
   const operations = [];
@@ -201,8 +207,88 @@ async function writeEncryptedStore(uid, storeName, records, key) {
     await batch.commit();
   }
   await setDoc(metaRef(uid, storeName), {
-    initialized: true, encryptionVersion: 1, updatedAt: serverTimestamp()
+    initialized: true, encryptionVersion: 1, revision: nextRevision, updatedAt: serverTimestamp()
   }, { merge: true });
+  storeRevisions.set(storeName, nextRevision);
+}
+
+async function writeEncryptedStoreSafely(uid, storeName, records, key, expectedRevision) {
+  if (!Array.isArray(records)) throw new Error("Formato inválido para " + storeName + ".");
+  const collectionRef = recordsRef(uid, storeName);
+  const prepared = [];
+  const nextIds = new Set();
+
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    if (!record || typeof record.id !== "string" || !record.id) {
+      throw new Error("Foi encontrado um registro sem identificador em " + storeName + ".");
+    }
+    if (nextIds.has(record.id)) throw new Error("Identificador duplicado em " + storeName + ".");
+    nextIds.add(record.id);
+    const encrypted = await encryptText(key, JSON.stringify(record));
+    prepared.push({
+      ref: doc(collectionRef, record.id),
+      data: { encrypted: true, ...encrypted, position: index, updatedAt: serverTimestamp() }
+    });
+  }
+
+  const revision = await runTransaction(db, async (transaction) => {
+    const metadataSnapshot = await transaction.get(metaRef(uid, storeName));
+    const existingSnapshot = await transaction.get(collectionRef);
+    const currentRevision = Number(metadataSnapshot.exists() ? metadataSnapshot.data().revision || 0 : 0);
+
+    if (currentRevision !== expectedRevision) {
+      throw fail("SYNC_CONFLICT", "Este módulo foi atualizado em outro computador. Atualize o CRM antes de continuar.");
+    }
+
+    const deletions = existingSnapshot.docs.filter((item) => !nextIds.has(item.id));
+    if (prepared.length + deletions.length + 1 > 450) {
+      throw fail("SYNC_STORE_TOO_LARGE", "Este módulo tem registros demais para uma gravação sincronizada segura. Nenhuma alteração foi enviada.");
+    }
+
+    prepared.forEach((item) => transaction.set(item.ref, item.data));
+    deletions.forEach((item) => transaction.delete(item.ref));
+    const next = currentRevision + 1;
+    transaction.set(metaRef(uid, storeName), {
+      initialized: true,
+      encryptionVersion: 1,
+      revision: next,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    return next;
+  });
+
+  storeRevisions.set(storeName, revision);
+  return revision;
+}
+
+function stopCloudRevisionWatchers() {
+  syncUnsubscribers.forEach((unsubscribe) => {
+    try { unsubscribe(); } catch (error) { console.warn("Não foi possível encerrar um observador de sincronização:", error); }
+  });
+  syncUnsubscribers = [];
+}
+
+function startCloudRevisionWatchers(uid) {
+  stopCloudRevisionWatchers();
+  for (const storeName of Object.values(stores)) {
+    const unsubscribe = onSnapshot(metaRef(uid, storeName), (snapshot) => {
+      const remoteRevision = Number(snapshot.exists() ? snapshot.data().revision || 0 : 0);
+      const localRevision = Number(storeRevisions.get(storeName) || 0);
+      if (remoteRevision <= localRevision) return;
+
+      writeErrors.add(storeName);
+      refreshWriteStatus();
+      setStatus("Outro computador atualizou " + storeName + ". Atualize esta página antes de continuar.", "error");
+      window.dispatchEvent(new CustomEvent("crm-cloud-conflict", {
+        detail: { storeName, revision: remoteRevision }
+      }));
+    }, (error) => {
+      console.error("Falha ao acompanhar sincronização de " + storeName + ":", error);
+      setStatus("Não foi possível acompanhar as atualizações de outro computador.", "error");
+    });
+    syncUnsubscribers.push(unsubscribe);
+  }
 }
 
 function installMemoryStorage(uid, key, initialValues) {
@@ -236,7 +322,9 @@ function installMemoryStorage(uid, key, initialValues) {
     pendingWrites += 1;
     refreshWriteStatus();
     const previous = queues.get(storeName) || Promise.resolve();
-    const next = previous.catch(() => {}).then(() => writeEncryptedStore(uid, storeName, records, activeKey));
+    const next = previous.catch(() => {}).then(() =>
+      writeEncryptedStoreSafely(uid, storeName, records, activeKey, Number(storeRevisions.get(storeName) || 0))
+    );
     queues.set(storeName, next);
     next.then(() => {
       pendingWrites = Math.max(0, pendingWrites - 1);
@@ -246,7 +334,11 @@ function installMemoryStorage(uid, key, initialValues) {
       pendingWrites = Math.max(0, pendingWrites - 1);
       writeErrors.add(storeName);
       refreshWriteStatus();
-      console.error("Falha ao sincronizar " + storeName + ":", error);
+      if (error?.code === "SYNC_CONFLICT") {
+        setStatus("Conflito de sincronização em " + storeName + ". Atualize a página para carregar os dados mais recentes.", "error");
+      } else {
+        console.error("Falha ao sincronizar " + storeName + ":", error);
+      }
     });
   };
 }
@@ -335,6 +427,7 @@ export async function initializeCloudData(uid, password, confirmation = "") {
       );
 
     if (cloudAlreadyCanonical) {
+      storeRevisions.set(storeName, cloud.revision);
       if (startupDiagnosticsEnabled()) {
         console.info("[CRM startup]", "cloud-write-skipped:" + storeName, {
           records: records.length,
@@ -354,10 +447,13 @@ export async function initializeCloudData(uid, password, confirmation = "") {
   await setDoc(securityDocument, { initialized: true, updatedAt: serverTimestamp() }, { merge: true });
   activeKey = key;
   queues = new Map();
+  storeRevisions = new Map();
+  stopCloudRevisionWatchers();
   pendingWrites = 0;
   writeErrors.clear();
   lastWriteError = false;
   installMemoryStorage(uid, key, initialValues);
+  startCloudRevisionWatchers(uid);
   setStatus("Dados criptografados e sincronizados", "ok");
   logStartupTiming("initialize-cloud-data-total", startupStartedAt, {
     stores: Object.keys(stores).length
@@ -646,6 +742,8 @@ export function isCloudDataSafeToLock() {
 }
 
 export function lockCloudData() {
+  stopCloudRevisionWatchers();
+  storeRevisions.clear();
   activeKey = null;
   memoryStores.clear();
   queues.clear();
