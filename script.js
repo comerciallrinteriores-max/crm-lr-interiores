@@ -2627,7 +2627,7 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
   const normalizedSearch = (searchTerm || "").trim().toLocaleLowerCase("pt-BR");
   const monthEntries = financeEntries.filter((entry) => {
     const effectiveDate = financeEffectiveDate(entry);
-    const hasPaymentThisMonth = entry.saleId && (entry.payments || []).some((payment) => payment.date.startsWith(month));
+    const hasPaymentThisMonth = (entry.payments || []).some((payment) => String(payment.date || "").startsWith(month));
     return effectiveDate.startsWith(month) || hasPaymentThisMonth ||
       (entry.status !== "paid" && entry.dueDate.startsWith(month));
   });
@@ -2648,7 +2648,7 @@ function renderFinance(searchTerm = $("#financeSearch").value) {
 
   const filtered = financeEntries.filter((entry) => {
     const effectiveDate = financeEffectiveDate(entry);
-    const hasPaymentThisMonth = entry.saleId && (entry.payments || []).some((payment) => payment.date.startsWith(month));
+    const hasPaymentThisMonth = (entry.payments || []).some((payment) => String(payment.date || "").startsWith(month));
     const matchesMonth = effectiveDate.startsWith(month) || hasPaymentThisMonth ||
       (entry.status !== "paid" && entry.dueDate.startsWith(month));
     const searchable = `${entry.description} ${entry.category} ${entry.clientName || ""} ${entry.notes || ""}`
