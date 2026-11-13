@@ -4445,3 +4445,82 @@ window.setInterval(() => {
   }
 }, 30000);
 
+
+// Aplica atualizações recebidas de outros computadores sem interromper formulários em edição.
+window.addEventListener("crm-cloud-store-updated", (event) => {
+  const storageKey = event.detail?.storageKey;
+  if (!storageKey) return;
+
+  switch (storageKey) {
+    case STORAGE_KEY:
+      clients = loadClients();
+      break;
+    case QUOTES_STORAGE_KEY:
+      quotes = loadQuotes();
+      break;
+    case FINANCE_STORAGE_KEY:
+      financeEntries = loadFinanceEntries();
+      break;
+    case SALES_STORAGE_KEY:
+      sales = loadSales();
+      break;
+    case PRODUCTION_STORAGE_KEY:
+      productionOrders = loadProductionOrders();
+      break;
+    case SUPPLIERS_STORAGE_KEY:
+      suppliers = loadSuppliers();
+      break;
+    case INVENTORY_STORAGE_KEY:
+      inventoryItems = loadInventoryItems();
+      break;
+    case INVENTORY_PURCHASE_STORAGE_KEY:
+      inventoryPurchaseItems = loadInventoryPurchaseItems();
+      break;
+    case PARTNERS_STORAGE_KEY:
+      partners = loadPartners();
+      break;
+    case COMMISSIONS_STORAGE_KEY:
+      commissions = loadCommissions();
+      break;
+    case TEAM_STORAGE_KEY:
+      teamMembers = loadTeamMembers();
+      break;
+    default:
+      return;
+  }
+
+  renderDashboard();
+  const activePage = document.querySelector(".page.active")?.id.replace("page-", "");
+  switch (activePage) {
+    case "clientes":
+      renderClients();
+      break;
+    case "orcamentos":
+      renderQuotes();
+      break;
+    case "vendas":
+      renderSales();
+      break;
+    case "producao":
+      renderProduction();
+      break;
+    case "financeiro":
+      renderFinance();
+      break;
+    case "parceiros":
+      renderPartners();
+      break;
+    case "equipe":
+      renderTeamMembers();
+      break;
+    case "fornecedores":
+      renderSuppliers();
+      break;
+    case "estoque":
+      renderInventory();
+      break;
+    case "marketing":
+      renderMarketing();
+      break;
+  }
+});
