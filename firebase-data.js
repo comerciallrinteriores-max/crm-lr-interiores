@@ -279,6 +279,11 @@ function stopCloudRevisionWatchers() {
   syncUnsubscribers = [];
 }
 
+function hasVisibleEditor() {
+  return Array.from(document.querySelectorAll("#crmApp form:not([hidden])"))
+    .some((form) => form.getClientRects().length > 0);
+}
+
 function startCloudRevisionWatchers(uid) {
   stopCloudRevisionWatchers();
   for (const storeName of Object.values(stores)) {
@@ -292,7 +297,7 @@ function startCloudRevisionWatchers(uid) {
       if (remoteRevision < localRevision ||
           (remoteRevision === localRevision && remoteUpdatedAt <= localUpdatedAt)) return;
 
-      if ((pendingWritesByStore.get(storeName) || 0) > 0 || document.querySelector("#crmApp form:not([hidden])")) {
+      if ((pendingWritesByStore.get(storeName) || 0) > 0 || hasVisibleEditor()) {
         staleStores.add(storeName);
         refreshWriteStatus();
         setStatus("Outro computador atualizou " + storeName + ". Feche o formulário e atualize a página para carregar os dados.", "error");
@@ -304,7 +309,7 @@ function startCloudRevisionWatchers(uid) {
 
       void readCloudStore(uid, storeName, activeKey).then((latest) => {
         if (!activeKey || (pendingWritesByStore.get(storeName) || 0) > 0 ||
-            document.querySelector("#crmApp form:not([hidden])")) {
+            hasVisibleEditor()) {
           staleStores.add(storeName);
           refreshWriteStatus();
           setStatus("Outro computador atualizou " + storeName + ". Atualize a página antes de continuar.", "error");
