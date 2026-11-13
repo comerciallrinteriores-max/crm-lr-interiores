@@ -39,7 +39,9 @@ let queues = new Map();
 let pendingWrites = 0;
 let lastWriteError = false;
 let storeRevisions = new Map();
+let pendingWritesByStore = new Map();
 let syncUnsubscribers = [];
+const staleStores = new Set();
 const writeErrors = new Set();
 
 function startupDiagnosticsEnabled() {
@@ -63,7 +65,7 @@ function setStatus(message, state = "ok") {
   element.setAttribute("aria-live", "polite");
 }
 function refreshWriteStatus() {
-  lastWriteError = writeErrors.size > 0;
+  lastWriteError = writeErrors.size > 0 || staleStores.size > 0;
   if (pendingWrites > 0) {
     setStatus(lastWriteError
       ? "Salvando na nuvem… há alterações anteriores não confirmadas"
@@ -77,7 +79,7 @@ function refreshWriteStatus() {
 async function waitForPendingWrites() {
   await Promise.all([...queues.values()].map((queue) => queue.catch(() => {})));
   if (lastWriteError) {
-    throw fail("SYNC_PENDING", "Há alterações que não foram confirmadas na nuvem. Resolva a sincronização antes de continuar.");
+    throw fail("SYNC_PENDING", "Há alterações pendentes ou atualizações de outro computador que precisam ser carregadas antes de continuar.");
   }
 }
 function recordsRef(uid, storeName) {
@@ -277,12 +279,41 @@ function startCloudRevisionWatchers(uid) {
       const localRevision = Number(storeRevisions.get(storeName) || 0);
       if (remoteRevision <= localRevision) return;
 
-      writeErrors.add(storeName);
-      refreshWriteStatus();
-      setStatus("Outro computador atualizou " + storeName + ". Atualize esta página antes de continuar.", "error");
-      window.dispatchEvent(new CustomEvent("crm-cloud-conflict", {
-        detail: { storeName, revision: remoteRevision }
-      }));
+      if ((pendingWritesByStore.get(storeName) || 0) > 0 || document.querySelector("#crmApp form:not([hidden])")) {
+        staleStores.add(storeName);
+        refreshWriteStatus();
+        setStatus("Outro computador atualizou " + storeName + ". Feche o formulário e atualize a página para carregar os dados.", "error");
+        window.dispatchEvent(new CustomEvent("crm-cloud-conflict", {
+          detail: { storeName, revision: remoteRevision }
+        }));
+        return;
+      }
+
+      void readCloudStore(uid, storeName, activeKey).then((latest) => {
+        if (!activeKey || (pendingWritesByStore.get(storeName) || 0) > 0 ||
+            document.querySelector("#crmApp form:not([hidden])")) {
+          staleStores.add(storeName);
+          refreshWriteStatus();
+          setStatus("Outro computador atualizou " + storeName + ". Atualize a página antes de continuar.", "error");
+          return;
+        }
+        const storageKey = Object.keys(stores).find((key) => stores[key] === storeName);
+        if (!storageKey) return;
+        memoryStores.set(storageKey, JSON.stringify(latest.records));
+        storeRevisions.set(storeName, latest.revision);
+        staleStores.delete(storeName);
+        writeErrors.delete(storeName);
+        refreshWriteStatus();
+        if (!lastWriteError) setStatus("Dados atualizados de outro computador", "ok");
+        window.dispatchEvent(new CustomEvent("crm-cloud-store-updated", {
+          detail: { storageKey, revision: latest.revision }
+        }));
+      }).catch((error) => {
+        console.error("Não foi possível carregar a atualização de " + storeName + ":", error);
+        staleStores.add(storeName);
+        refreshWriteStatus();
+        setStatus("Não foi possível carregar uma atualização de outro computador. Atualize a página.", "error");
+      });
     }, (error) => {
       console.error("Falha ao acompanhar sincronização de " + storeName + ":", error);
       setStatus("Não foi possível acompanhar as atualizações de outro computador.", "error");
@@ -320,6 +351,7 @@ function installMemoryStorage(uid, key, initialValues) {
       return;
     }
     pendingWrites += 1;
+    pendingWritesByStore.set(storeName, (pendingWritesByStore.get(storeName) || 0) + 1);
     refreshWriteStatus();
     const previous = queues.get(storeName) || Promise.resolve();
     const next = previous.catch(() => {}).then(() =>
@@ -328,10 +360,12 @@ function installMemoryStorage(uid, key, initialValues) {
     queues.set(storeName, next);
     next.then(() => {
       pendingWrites = Math.max(0, pendingWrites - 1);
+      pendingWritesByStore.set(storeName, Math.max(0, (pendingWritesByStore.get(storeName) || 1) - 1));
       writeErrors.delete(storeName);
       refreshWriteStatus();
     }).catch((error) => {
       pendingWrites = Math.max(0, pendingWrites - 1);
+      pendingWritesByStore.set(storeName, Math.max(0, (pendingWritesByStore.get(storeName) || 1) - 1));
       writeErrors.add(storeName);
       refreshWriteStatus();
       if (error?.code === "SYNC_CONFLICT") {
@@ -448,6 +482,8 @@ export async function initializeCloudData(uid, password, confirmation = "") {
   activeKey = key;
   queues = new Map();
   storeRevisions = new Map();
+  pendingWritesByStore = new Map();
+  staleStores.clear();
   stopCloudRevisionWatchers();
   pendingWrites = 0;
   writeErrors.clear();
@@ -744,6 +780,8 @@ export function isCloudDataSafeToLock() {
 export function lockCloudData() {
   stopCloudRevisionWatchers();
   storeRevisions.clear();
+  pendingWritesByStore.clear();
+  staleStores.clear();
   activeKey = null;
   memoryStores.clear();
   queues.clear();
