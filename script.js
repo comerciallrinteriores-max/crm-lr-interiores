@@ -1234,6 +1234,7 @@ function renderQuotes(
         </div>
 
         <div class="quote-row-actions">
+          ${quoteReceiptButtons(quote.id)}
           ${quote.status === "Aprovado" && !sales.some((sale) => sale.quoteId === quote.id) ? `
             <button type="button" class="button button-primary" data-quote-convert="${escapeHTML(quote.id)}">Gerar venda</button>
           ` : ""}
@@ -1264,6 +1265,8 @@ $("#quoteSearch").addEventListener("input", (event) =>
 );
 
 $("#quoteList").addEventListener("click", (event) => {
+  const receiptButton = event.target.closest("[data-quote-receipt-entry]");
+  if (receiptButton) { printPaymentReceipt(receiptButton.dataset.quoteReceiptEntry, receiptButton.dataset.quoteReceiptPayment); return; }
   const convertButton = event.target.closest("[data-quote-convert]");
   const duplicateButton = event.target.closest("[data-quote-duplicate]");
   const editButton = event.target.closest("[data-quote-edit]");
@@ -2587,6 +2590,14 @@ function financeEntryMatchesView(entry, view) {
   if (view === "team") return entry.category === "Mão de obra" || Boolean(entry.teamMemberId);
   if (view === "commissions") return entry.category === "Comissões" || Boolean(entry.linkedCommissionId);
   return true;
+}
+
+function quoteReceiptButtons(quoteId) {
+  const saleIds = new Set(sales.filter((sale) => sale.quoteId === quoteId).map((sale) => sale.id));
+  return financeEntries.filter((entry) => entry.type === "income" && (entry.quoteId === quoteId || saleIds.has(entry.saleId)))
+    .flatMap((entry) => (entry.payments || []).map((payment, index) =>
+      `<button type="button" class="button button-outline" data-quote-receipt-entry="${escapeHTML(entry.id)}" data-quote-receipt-payment="${escapeHTML(payment.id)}">Recibo ${index + 1}</button>`
+    )).join("");
 }
 
 function printPaymentReceipt(entryId, paymentId) {
