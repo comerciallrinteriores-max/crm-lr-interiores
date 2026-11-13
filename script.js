@@ -2364,10 +2364,10 @@ function loadFinanceEntries() {
       const saleId = typeof entry.saleId === "string" ? entry.saleId : "";
       let payments = Array.isArray(entry.payments)
         ? entry.payments.filter((payment) => payment && Number(payment.amount) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(payment.date || ""))
-          .map((payment) => ({ id: payment.id || createId(), amount: Math.round(Math.max(0, Number(payment.amount) || 0) * 100) / 100, date: payment.date, method: payment.method || "" }))
+          .map((payment, index) => ({ id: payment.id || `${entry.id}-pagamento-${index + 1}`, amount: Math.round(Math.max(0, Number(payment.amount) || 0) * 100) / 100, date: payment.date, method: payment.method || "" }))
         : [];
-      if (!payments.length && entry.type !== "expense" && entry.status === "paid" && !saleId) payments = [{ id: createId(), amount, date: entry.paidDate || entry.dueDate || localISODate(), method: "" }];
-      else if (!payments.length && saleId && Number(entry.paidAmount) > 0) payments = [{ id: createId(), amount: Math.max(0, Number(entry.paidAmount) || 0), date: entry.paidDate || entry.dueDate || localISODate(), method: "" }];
+      if (!payments.length && entry.type !== "expense" && entry.status === "paid" && !saleId) payments = [{ id: `${entry.id}-pagamento-1`, amount, date: entry.paidDate || entry.dueDate || localISODate(), method: "" }];
+      else if (!payments.length && saleId && Number(entry.paidAmount) > 0) payments = [{ id: `${entry.id}-pagamento-1`, amount: Math.max(0, Number(entry.paidAmount) || 0), date: entry.paidDate || entry.dueDate || localISODate(), method: "" }];
       const paidAmount = entry.type === "expense" ? Math.max(0, Number(entry.paidAmount) || 0) : Math.min(amount, payments.reduce((sum, payment) => sum + payment.amount, 0));
       const status = entry.type === "expense" ? (entry.status === "paid" ? "paid" : "pending") : (paidAmount >= amount && amount > 0 ? "paid" : paidAmount > 0 ? "partial" : "pending");
       return {
