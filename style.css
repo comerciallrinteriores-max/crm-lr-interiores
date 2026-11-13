@@ -1231,3 +1231,7 @@ textarea {
  .inventory-purchase-heading{align-items:flex-start;flex-direction:column}
  .inventory-purchase-row{flex-wrap:wrap}
 }
+
+/* Recibos e ações de recebimento */
+.finance-row-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.finance-row-actions .button { font-size:11px; padding:7px 9px; }
