@@ -45,6 +45,8 @@ let suppressRemoteUpdates = false;
 let syncUnsubscribers = [];
 const staleStores = new Set();
 const writeErrors = new Set();
+// Revisions observed while a local write is in flight are checked after its transaction settles.
+const observedRemoteRevisions = new Map();
 
 function startupDiagnosticsEnabled() {
   return new URLSearchParams(globalThis.location?.search || "").get("debugPerformance") === "1";
@@ -266,8 +268,15 @@ async function writeEncryptedStoreSafely(uid, storeName, records, key, expectedR
     return next;
   });
 
-  storeRevisions.set(storeName, revision);
   const savedMeta = await getDoc(metaRef(uid, storeName));
+  const confirmedRevision = Number(savedMeta.exists() ? savedMeta.data().revision || 0 : 0);
+  if (confirmedRevision !== revision) {
+    observedRemoteRevisions.set(storeName, Math.max(
+      Number(observedRemoteRevisions.get(storeName) || 0), confirmedRevision
+    ));
+    throw fail("SYNC_CONFLICT", "A gravação foi confirmada, mas outra atualização chegou em seguida. Atualize o CRM para carregar a versão mais recente.");
+  }
+  storeRevisions.set(storeName, revision);
   storeUpdatedAt.set(storeName, Number(savedMeta.data()?.updatedAt?.toMillis?.() || 0));
   return revision;
 }
@@ -296,12 +305,16 @@ function startCloudRevisionWatchers(uid) {
       const localUpdatedAt = Number(storeUpdatedAt.get(storeName) || 0);
       if (remoteRevision < localRevision ||
           (remoteRevision === localRevision && remoteUpdatedAt <= localUpdatedAt)) return;
-      if ((pendingWritesByStore.get(storeName) || 0) > 0 && remoteRevision === localRevision) {
-        storeUpdatedAt.set(storeName, remoteUpdatedAt);
+      if ((pendingWritesByStore.get(storeName) || 0) > 0) {
+        // A própria transação altera o documento de metadados. Não trate esse evento
+        // como conflito; guarde a revisão e valide-a quando a gravação terminar.
+        observedRemoteRevisions.set(storeName, Math.max(
+          Number(observedRemoteRevisions.get(storeName) || 0), remoteRevision
+        ));
         return;
       }
 
-      if ((pendingWritesByStore.get(storeName) || 0) > 0 || hasVisibleEditor()) {
+      if (hasVisibleEditor()) {
         staleStores.add(storeName);
         refreshWriteStatus();
         setStatus("Outro computador atualizou " + storeName + ". Feche o formulário e atualize a página para carregar os dados.", "error");
@@ -388,16 +401,32 @@ function installMemoryStorage(uid, key, initialValues) {
     next.then(() => {
       pendingWrites = Math.max(0, pendingWrites - 1);
       pendingWritesByStore.set(storeName, Math.max(0, (pendingWritesByStore.get(storeName) || 1) - 1));
+      const observedRevision = Number(observedRemoteRevisions.get(storeName) || 0);
+      const confirmedRevision = Number(storeRevisions.get(storeName) || 0);
+      observedRemoteRevisions.delete(storeName);
+      if (observedRevision > confirmedRevision) {
+        staleStores.add(storeName);
+        setStatus("Há uma atualização mais recente em " + storeName + ". Atualize a página para carregar os dados antes de continuar.", "error");
+        window.dispatchEvent(new CustomEvent("crm-cloud-conflict", {
+          detail: { storeName, revision: observedRevision }
+        }));
+      } else {
+        staleStores.delete(storeName);
+      }
       writeErrors.delete(storeName);
       refreshWriteStatus();
     }).catch((error) => {
       pendingWrites = Math.max(0, pendingWrites - 1);
       pendingWritesByStore.set(storeName, Math.max(0, (pendingWritesByStore.get(storeName) || 1) - 1));
       writeErrors.add(storeName);
+      if (error?.code === "SYNC_CONFLICT") staleStores.add(storeName);
       refreshWriteStatus();
       if (error?.code === "SYNC_CONFLICT") {
-        setStatus("Conflito de sincronização em " + storeName + ". Atualize a página para carregar os dados mais recentes.", "error");
+        setStatus("Conflito ao salvar " + storeName + ". Atualize a página para carregar a versão mais recente. A alteração atual não foi confirmada.", "error");
+      } else if (error?.code === "SYNC_STORE_TOO_LARGE") {
+        setStatus("Não foi possível salvar " + storeName + ": o módulo ultrapassou o limite seguro de sincronização. Nenhuma alteração desta gravação foi enviada.", "error");
       } else {
+        setStatus("Não foi possível confirmar o salvamento de " + storeName + ". Verifique a conexão antes de continuar.", "error");
         console.error("Falha ao sincronizar " + storeName + ":", error);
       }
     });
@@ -459,6 +488,7 @@ export async function initializeCloudData(uid, password, confirmation = "") {
   storeUpdatedAt = new Map();
   pendingWritesByStore = new Map();
   staleStores.clear();
+  observedRemoteRevisions.clear();
   const initialValues = {};
   for (const [storageKey, storeName] of Object.entries(stores)) {
     const localText = localStorage.getItem(storageKey);
@@ -822,6 +852,7 @@ export function lockCloudData() {
   storeUpdatedAt.clear();
   pendingWritesByStore.clear();
   staleStores.clear();
+  observedRemoteRevisions.clear();
   activeKey = null;
   memoryStores.clear();
   queues.clear();
