@@ -241,9 +241,13 @@ async function writeEncryptedStoreSafely(uid, storeName, records, key, expectedR
     });
   }
 
+  // O SDK Web do Firestore permite transaction.get() para documentos, não para
+  // uma CollectionReference. Leia a coleção antes da transação; a revisão no
+  // documento de metadados serializa as gravações concorrentes deste módulo.
+  const existingSnapshot = await getDocs(collectionRef);
+
   const revision = await runTransaction(db, async (transaction) => {
     const metadataSnapshot = await transaction.get(metaRef(uid, storeName));
-    const existingSnapshot = await transaction.get(collectionRef);
     const currentRevision = Number(metadataSnapshot.exists() ? metadataSnapshot.data().revision || 0 : 0);
 
     const currentUpdatedAt = Number(metadataSnapshot.exists() ? metadataSnapshot.data().updatedAt?.toMillis?.() || 0 : 0);
