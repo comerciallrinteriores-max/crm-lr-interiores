@@ -426,7 +426,10 @@ function installMemoryStorage(uid, key, initialValues) {
       } else if (error?.code === "SYNC_STORE_TOO_LARGE") {
         setStatus("Não foi possível salvar " + storeName + ": o módulo ultrapassou o limite seguro de sincronização. Nenhuma alteração desta gravação foi enviada.", "error");
       } else {
-        setStatus("Não foi possível confirmar o salvamento de " + storeName + ". Verifique a conexão antes de continuar.", "error");
+        const errorCode = String(error?.code || "sem-codigo");
+        const errorMessage = String(error?.message || "O Firebase não informou o motivo.");
+        const safeMessage = errorMessage.replace(/https?:\/\/\S+/g, "[link]").slice(0, 220);
+        setStatus("Falha ao salvar " + storeName + " (" + errorCode + "): " + safeMessage, "error");
         console.error("Falha ao sincronizar " + storeName + ":", error);
       }
     });
